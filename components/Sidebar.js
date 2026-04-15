@@ -1,0 +1,201 @@
+import React from 'react';
+import { useRouter } from 'next/router';
+import {
+  Ship, Navigation, Activity, Clock, Hash,
+  Anchor, Flag, Ruler, Weight, Calendar, User,
+  MapPin, BarChart2, Info, ExternalLink
+} from 'lucide-react';
+
+const STATUS_CONFIG = {
+  normal:  { color: '#34d399', bg: 'rgba(16,185,129,0.15)', label: 'BÌNH THƯỜNG' },
+  warning: { color: '#fbbf24', bg: 'rgba(245,158,11,0.15)',  label: 'CẢNH BÁO'   },
+  danger:  { color: '#f87171', bg: 'rgba(239,68,68,0.15)',   label: 'NGUY HIỂM'  },
+};
+
+const FLAGS = {
+  VN: '🇻🇳', SG: '🇸🇬', JP: '🇯🇵', KR: '🇰🇷',
+  CN: '🇨🇳', PA: '🇵🇦', MH: '🇲🇭', LR: '🇱🇷', BS: '🇧🇸',
+};
+
+function InfoRow({ icon, label, value }) {
+  if (!value && value !== 0) return null;
+  return (
+    <div className="info-row">
+      <div className="info-row-icon">{icon}</div>
+      <div className="info-row-content">
+        <span className="info-label">{label}</span>
+        <span className="info-value">{value}</span>
+      </div>
+      <style jsx>{`
+        .info-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+        .info-row:last-child{border-bottom:none;}
+        .info-row-icon{color:#475569;flex-shrink:0;width:16px;display:flex;align-items:center;justify-content:center;}
+        .info-row-content{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0;}
+        .info-label{font-size:0.65rem;text-transform:uppercase;letter-spacing:0.06em;color:#475569;font-weight:700;}
+        .info-value{font-size:0.88rem;color:#e2e8f0;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+      `}</style>
+    </div>
+  );
+}
+
+export default function Sidebar({ selectedVessel }) {
+  const router = useRouter();
+  const statusCfg = STATUS_CONFIG[selectedVessel?.status?.toLowerCase()] || STATUS_CONFIG.normal;
+
+  return (
+    <div className="sidebar">
+      <div className="sidebar-header">
+        <BarChart2 size={16} className="sh-icon" />
+        <h2>Chi tiết Tàu</h2>
+      </div>
+
+      {selectedVessel ? (
+        <div className="vessel-info">
+          {/* Vessel Image */}
+          {selectedVessel.image_url && (
+            <div className="vessel-img-wrap">
+              <img src={selectedVessel.image_url} alt={selectedVessel.Vessel_name} className="vessel-img" />
+              <div className="vessel-img-overlay" />
+            </div>
+          )}
+
+          {/* Status + Name */}
+          <div className="vessel-hero">
+            <div className="status-badge" style={{ color: statusCfg.color, background: statusCfg.bg }}>
+              <span className="status-dot" style={{ background: statusCfg.color }} />
+              {statusCfg.label}
+            </div>
+            <h3 className="vessel-name">{selectedVessel.Vessel_name}</h3>
+            {selectedVessel.vessel_type && (
+              <span className="vessel-type-tag">{selectedVessel.vessel_type}</span>
+            )}
+          </div>
+
+          {/* Dynamic (realtime) data */}
+          <div className="section-label">📡 Vị trí & Hành trình</div>
+          <div className="info-card">
+            <InfoRow icon={<Activity size={14}/>} label="Tốc độ" value={selectedVessel.speed != null ? `${Number(selectedVessel.speed).toFixed(1)} knots` : null} />
+            <InfoRow icon={<Navigation size={14}/>} label="Hướng" value={selectedVessel.heading != null ? `${selectedVessel.heading}°` : null} />
+            <InfoRow icon={<MapPin size={14}/>} label="Vĩ độ (Lat)" value={selectedVessel.lat != null ? selectedVessel.lat.toFixed(5) : null} />
+            <InfoRow icon={<MapPin size={14}/>} label="Kinh độ (Lng)" value={selectedVessel.lng != null ? selectedVessel.lng.toFixed(5) : null} />
+            <InfoRow icon={<Clock size={14}/>} label="Cập nhật" value={selectedVessel.created_at ? new Date(selectedVessel.created_at).toLocaleString('vi-VN') : null} />
+          </div>
+
+          {/* Static vessel info */}
+          <div className="section-label">🚢 Thông tin tàu</div>
+          <div className="info-card">
+            <InfoRow icon={<Hash size={14}/>} label="Vessel ID" value={selectedVessel.Vessel_id} />
+            <InfoRow icon={<Anchor size={14}/>} label="Số IMO" value={selectedVessel.IMO} />
+            <InfoRow icon={<Hash size={14}/>} label="Số MMSI" value={selectedVessel.MMSI} />
+            <InfoRow icon={<Flag size={14}/>} label="Cờ hiệu" value={
+              selectedVessel.flag
+                ? `${FLAGS[selectedVessel.flag] || ''} ${selectedVessel.flag}`
+                : null
+            } />
+            <InfoRow icon={<User size={14}/>} label="Chủ tàu" value={selectedVessel.owner} />
+            <InfoRow icon={<Calendar size={14}/>} label="Năm đóng" value={selectedVessel.year_built} />
+          </div>
+
+          {/* Technical specs */}
+          {(selectedVessel.length_m || selectedVessel.width_m || selectedVessel.gross_tonnage) && (
+            <>
+              <div className="section-label">📐 Thông số kỹ thuật</div>
+              <div className="specs-grid">
+                {selectedVessel.length_m && (
+                  <div className="spec-box">
+                    <Ruler size={14} className="spec-icon"/>
+                    <div className="spec-val">{selectedVessel.length_m} m</div>
+                    <div className="spec-label">Chiều dài</div>
+                  </div>
+                )}
+                {selectedVessel.width_m && (
+                  <div className="spec-box">
+                    <Ruler size={14} className="spec-icon" style={{transform:'rotate(90deg)'}}/>
+                    <div className="spec-val">{selectedVessel.width_m} m</div>
+                    <div className="spec-label">Chiều rộng</div>
+                  </div>
+                )}
+                {selectedVessel.gross_tonnage && (
+                  <div className="spec-box">
+                    <Weight size={14} className="spec-icon"/>
+                    <div className="spec-val">{Number(selectedVessel.gross_tonnage).toLocaleString()}</div>
+                    <div className="spec-label">DWT</div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Description */}
+          {selectedVessel.description && (
+            <div className="vessel-desc">
+              <Info size={13} />
+              <p>{selectedVessel.description}</p>
+            </div>
+          )}
+
+          {/* Quick link to vessel detail */}
+          <button className="view-detail-btn" onClick={() => router.push('/vessels')}>
+            <ExternalLink size={14} /> Quản lý đội tàu
+          </button>
+        </div>
+      ) : (
+        <div className="empty-state">
+          <div className="empty-ship-wrapper">
+            <Ship size={48} className="empty-icon" />
+          </div>
+          <p className="empty-title">Chưa chọn tàu</p>
+          <p className="empty-sub">Nhấp chuột phải vào tàu trên bản đồ để xem thông tin và hành trình.</p>
+        </div>
+      )}
+
+      <style jsx>{`
+        .sidebar {
+          display: flex; flex-direction: column;
+          flex: 1; min-width: 300px; max-width: 340px;
+          background: var(--bg-sidebar);
+          color: var(--text-primary);
+          height: 100%; overflow-y: auto;
+          box-shadow: -4px 0 20px rgba(0,0,0,0.3);
+          scrollbar-width: thin;
+          scrollbar-color: rgba(56,189,248,0.2) transparent;
+        }
+        .sidebar-header {
+          display: flex; align-items: center; gap: 10px;
+          padding: 18px 20px;
+          border-bottom: 1px solid rgba(255,255,255,0.08);
+          background: rgba(0,0,0,0.15);
+          position: sticky; top: 0; z-index: 10;
+        }
+        .sh-icon { color: #38bdf8; }
+        .sidebar-header h2 { font-weight: 700; font-size: 1rem; margin: 0; }
+        .vessel-info { display: flex; flex-direction: column; }
+        .vessel-img-wrap { position: relative; height: 160px; overflow: hidden; }
+        .vessel-img { width: 100%; height: 100%; object-fit: cover; }
+        .vessel-img-overlay { position: absolute; bottom: 0; left: 0; right: 0; height: 50%; background: linear-gradient(to top, var(--bg-sidebar), transparent); }
+        .vessel-hero { padding: 16px 20px 12px; }
+        .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; margin-bottom: 8px; }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+        .vessel-name { font-size: 1.25rem; font-weight: 800; margin: 0 0 6px; color: #f1f5f9; line-height: 1.2; }
+        .vessel-type-tag { display: inline-block; background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.2); color: #38bdf8; border-radius: 6px; padding: 2px 10px; font-size: 0.72rem; font-weight: 600; }
+        .section-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #475569; padding: 12px 20px 4px; }
+        .info-card { margin: 0 12px 4px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 4px 12px; }
+        .specs-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 12px 4px; }
+        .spec-box { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 10px 8px; text-align: center; }
+        .spec-icon { color: #38bdf8; margin: 0 auto 4px; display: block; }
+        .spec-val { font-size: 0.88rem; font-weight: 700; color: #f1f5f9; }
+        .spec-label { font-size: 0.65rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+        .vessel-desc { display: flex; gap: 8px; margin: 4px 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 10px 12px; color: #94a3b8; font-size: 0.8rem; line-height: 1.5; }
+        .vessel-desc p { margin: 0; }
+        .view-detail-btn { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 12px 12px 20px; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.2); color: #38bdf8; border-radius: 10px; padding: 9px 0; cursor: pointer; font-size: 0.84rem; font-weight: 600; transition: all 0.2s; width: calc(100% - 24px); }
+        .view-detail-btn:hover { background: rgba(56,189,248,0.15); }
+        .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 24px; text-align: center; gap: 12px; }
+        .empty-ship-wrapper { width: 80px; height: 80px; border-radius: 20px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); display: flex; align-items: center; justify-content: center; }
+        .empty-icon { color: #334155; }
+        .empty-title { font-size: 1rem; font-weight: 600; color: #64748b; margin: 0; }
+        .empty-sub { font-size: 0.8rem; color: #475569; line-height: 1.6; margin: 0; }
+      `}</style>
+    </div>
+  );
+}

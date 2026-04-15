@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+:root {
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --bg-sidebar: #1e293b;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  width: 100vw;
+  height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Only lock overflow on the main app layout (map), not on other pages */
+#__next {
+  width: 100vw;
+  min-height: 100vh;
+}
+
+.layout {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.map-container {
+  flex: 3; /* 75% */
+  height: 100%;
+  position: relative;
+}
+
+.sidebar {
+  flex: 1; /* 25% */
+  min-width: 300px;
+  background-color: var(--bg-sidebar);
+  color: var(--text-primary);
+  height: 100%;
+  overflow-y: auto;
+  box-shadow: -4px 0 15px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+}
+
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Custom Marker Colors */
+.marker-normal {
+  filter: hue-rotate(85deg) brightness(1.2);
+}
+.marker-warning {
+  filter: hue-rotate(0deg) brightness(1.5) sepia(1) saturate(5); /* approximate orange */
+}
+.marker-danger {
+  filter: hue-rotate(150deg) saturate(3) brightness(0.8); /* base Leaflet marker is blue; we'll provide custom icons instead of filter */
+}
+
+/* Let's define the markers directly in JS with custom SVG using Leaflet divIcon */
