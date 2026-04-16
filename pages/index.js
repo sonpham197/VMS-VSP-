@@ -193,13 +193,23 @@ export default function Home() {
           criteria
         })
       });
+      
+      if (!res.ok) {
+        const errText = await res.text();
+        alert(`Lỗi API (${res.status}): ${errText.substring(0, 50)}...`);
+        setIsPredicting(false);
+        return;
+      }
+      
       const data = await res.json();
       if (data.success) {
         setRouteData(data);
       } else {
         alert('Lỗi tính toán hải trình: ' + data.error);
       }
-    } catch { alert('Lỗi mạng khi gọi API Route'); }
+    } catch (err) { 
+      alert('Lỗi mạng khi gọi API Route: ' + err.message); 
+    }
     setIsPredicting(false);
   };
 

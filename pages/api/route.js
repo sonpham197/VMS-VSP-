@@ -72,17 +72,6 @@ export default async function handler(req, res) {
         pathCoordinates = calcPoints;
     }
 
-    // If perturbed, we generate a curved line for aesthetics using bezier spline
-    if (isPerturbed) {
-       const line = turf.lineString(pathCoordinates);
-       try {
-           const curved = turf.bezierSpline(line, { resolution: 10000 });
-           pathCoordinates = curved.geometry.coordinates;
-       } catch {
-           // fallback
-       }
-    }
-
     routeLine = turf.lineString(pathCoordinates);
 
     // 3. Distance
