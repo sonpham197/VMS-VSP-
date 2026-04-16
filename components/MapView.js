@@ -48,6 +48,7 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
   const [contextMenu, setContextMenu] = useState(null);
   const [mapContextMenu, setMapContextMenu] = useState(null);
   const [weatherVessel, setWeatherVessel] = useState(null);
+  const [routeCriteria, setRouteCriteria] = useState({ time: true, fuel: false, risk: false, weather: false });
   // Group tracks by Vessel_id
   const tracksByVessel = useMemo(() => {
     const grouped = {};
@@ -196,9 +197,38 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
                   Độ dài: {routeData.distanceNM?.toFixed(1)} NM ({routeData.distanceKm?.toFixed(1)} km)<br/>
                   ETA: <strong style={{color: '#f8fafc'}}>{new Date(routeData.eta).toLocaleString()}</strong><br/>
                   Thời gian đi: {routeData.timeHours?.toFixed(1)} giờ
+                  {routeData.metrics && (
+                    <div style={{marginTop: '6px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: '0.85em', color: '#cbd5e1', textAlign: 'left'}}>
+                      <div style={{fontWeight: 'bold', color: '#38bdf8', marginBottom: '2px'}}>📊 Tối ưu hóa (Cost Score: {routeData.metrics.costScore?.toFixed(2)})</div>
+                      ⛽ Nhiên liệu: {routeData.metrics.fuel?.toFixed(1)} tấn<br/>
+                      ⛈ Thời tiết (Gió): {routeData.metrics.weatherValue} km/h<br/>
+                      ⚠️ Rủi ro: <span style={{color: routeData.metrics.riskStatus === 'Cao' ? '#f87171' : '#10b981'}}>{routeData.metrics.riskStatus}</span>
+                    </div>
+                  )}
                </div>
             </Tooltip>
           </CircleMarker>
+
+          {/* Interval points every 2 hours */}
+          {routeData.intervalPoints && routeData.intervalPoints.map((pt, idx) => (
+             <CircleMarker
+                 key={`route-interval-${idx}`}
+                 center={[pt.lat, pt.lng]}
+                 radius={4}
+                 color="#10b981"
+                 fillColor="#0f172a"
+                 fillOpacity={1}
+                 weight={2}
+               >
+                 <Tooltip direction="top" opacity={1}>
+                   <div style={{ textAlign: 'center' }}>
+                     <strong style={{color: '#10b981'}}>H+{(pt.hour)} giờ</strong><br/>
+                     Lat: {pt.lat?.toFixed(5)}, Lng: {pt.lng?.toFixed(5)}<br/>
+                     {new Date(pt.time).toLocaleString()}
+                   </div>
+                 </Tooltip>
+             </CircleMarker>
+          ))}
         </React.Fragment>
       )}
 
@@ -378,8 +408,23 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
         >
           <div className="cm-header">Lộ trình mục tiêu</div>
           <div className="cm-section-label">Từ: {selectedVessel?.Vessel_name}</div>
-          <button style={{color: '#10b981'}} onClick={() => { 
-            onRouteRequest(selectedVessel, mapContextMenu.lat, mapContextMenu.lng); 
+          
+          <div className="cm-section-label" style={{marginTop: '8px', color: '#94a3b8'}}>Ưu tiên tối ưu:</div>
+          <label style={{display: 'flex', alignItems: 'center', padding: '4px 10px', fontSize: '0.8rem', cursor: 'pointer', color: '#cbd5e1'}}>
+            <input type="checkbox" checked={routeCriteria.time} onChange={(e) => setRouteCriteria({...routeCriteria, time: e.target.checked})} style={{marginRight: '8px'}} /> ⏱ Thời gian (Time)
+          </label>
+          <label style={{display: 'flex', alignItems: 'center', padding: '4px 10px', fontSize: '0.8rem', cursor: 'pointer', color: '#cbd5e1'}}>
+            <input type="checkbox" checked={routeCriteria.fuel} onChange={(e) => setRouteCriteria({...routeCriteria, fuel: e.target.checked})} style={{marginRight: '8px'}} /> ⛽ Nhiên liệu (Fuel)
+          </label>
+          <label style={{display: 'flex', alignItems: 'center', padding: '4px 10px', fontSize: '0.8rem', cursor: 'pointer', color: '#cbd5e1'}}>
+            <input type="checkbox" checked={routeCriteria.risk} onChange={(e) => setRouteCriteria({...routeCriteria, risk: e.target.checked})} style={{marginRight: '8px'}} /> ⚠️ Rủi ro (Risk)
+          </label>
+          <label style={{display: 'flex', alignItems: 'center', padding: '4px 10px', fontSize: '0.8rem', cursor: 'pointer', color: '#cbd5e1'}}>
+            <input type="checkbox" checked={routeCriteria.weather} onChange={(e) => setRouteCriteria({...routeCriteria, weather: e.target.checked})} style={{marginRight: '8px'}} /> ⛈ Thời tiết (Weather)
+          </label>
+
+          <button style={{color: '#10b981', marginTop: '8px'}} onClick={() => { 
+            onRouteRequest(selectedVessel, mapContextMenu.lat, mapContextMenu.lng, routeCriteria); 
             setMapContextMenu(null); 
           }}>🎯 Tính toán hải trình đến đây</button>
           

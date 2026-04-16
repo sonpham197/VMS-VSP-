@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import {
   Ship, Navigation, Activity, Clock, Hash,
   Anchor, Flag, Ruler, Weight, Calendar, User,
-  MapPin, BarChart2, Info, ExternalLink
+  MapPin, BarChart2, Info, ExternalLink, Palette
 } from 'lucide-react';
 
 const STATUS_CONFIG = {
@@ -40,13 +40,37 @@ function InfoRow({ icon, label, value }) {
 
 export default function Sidebar({ selectedVessel }) {
   const router = useRouter();
+  const [bgColor, setBgColor] = useState('#0f172a'); // default dark sidebar bg
+
+  useEffect(() => {
+    const saved = localStorage.getItem('sidebarBgColor');
+    if (saved) setBgColor(saved);
+  }, []);
+
+  const handleBgColorChange = (e) => {
+    const hex = e.target.value;
+    setBgColor(hex);
+    localStorage.setItem('sidebarBgColor', hex);
+  };
+
   const statusCfg = STATUS_CONFIG[selectedVessel?.status?.toLowerCase()] || STATUS_CONFIG.normal;
 
   return (
-    <div className="sidebar">
+    <div className="sidebar" style={{ background: bgColor }}>
       <div className="sidebar-header">
-        <BarChart2 size={16} className="sh-icon" />
-        <h2>Chi tiết Tàu</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+          <BarChart2 size={16} className="sh-icon" />
+          <h2>Chi tiết Tàu</h2>
+        </div>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }} title="Đổi màu nền thẻ">
+          <input 
+            type="color" 
+            value={bgColor} 
+            onChange={handleBgColorChange} 
+            style={{ opacity: 0, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 2 }} 
+          />
+          <Palette size={16} className="sh-icon" style={{ zIndex: 1 }} />
+        </div>
       </div>
 
       {selectedVessel ? (
@@ -153,12 +177,12 @@ export default function Sidebar({ selectedVessel }) {
         .sidebar {
           display: flex; flex-direction: column;
           flex: 1; min-width: 300px; max-width: 340px;
-          background: var(--bg-sidebar);
           color: var(--text-primary);
           height: 100%; overflow-y: auto;
           box-shadow: -4px 0 20px rgba(0,0,0,0.3);
           scrollbar-width: thin;
           scrollbar-color: rgba(56,189,248,0.2) transparent;
+          transition: background-color 0.3s ease;
         }
         .sidebar-header {
           display: flex; align-items: center; gap: 10px;

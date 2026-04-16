@@ -122,6 +122,8 @@ export default function Home() {
 
   // ── Track History Request ─────────────────────────────────────────────────
   const handleTrackRequest = async (vesselId, hours) => {
+    setPredictedTracks([]);
+    setRouteData(null);
     const { data: latestData } = await supabase
       .from('vessel_tracks')
       .select('created_at')
@@ -154,6 +156,8 @@ export default function Home() {
     }
     setIsPredicting(true);
     setPredictedTracks([]);
+    setRouteData(null);
+    setActiveTrackData([]);
     try {
       const res = await fetch('/api/predict', {
         method: 'POST',
@@ -172,9 +176,11 @@ export default function Home() {
   };
 
   // ── Route Prediction Request ────────────────────────────────────────────────
-  const handleRouteRequest = async (startVessel, destLat, destLng) => {
+  const handleRouteRequest = async (startVessel, destLat, destLng, criteria) => {
     setIsPredicting(true);
     setRouteData(null);
+    setPredictedTracks([]);
+    setActiveTrackData([]);
     try {
       const res = await fetch('/api/route', {
         method: 'POST',
@@ -183,7 +189,8 @@ export default function Home() {
           startLat: startVessel.lat, 
           startLng: startVessel.lng, 
           destLat, destLng, 
-          speed: startVessel.speed 
+          speed: startVessel.speed,
+          criteria
         })
       });
       const data = await res.json();
