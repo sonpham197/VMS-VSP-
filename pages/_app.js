@@ -1,5 +1,6 @@
 import '@/styles/globals.css'
 import Head from 'next/head'
+import { Analytics } from '@vercel/analytics/next';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
@@ -52,6 +53,7 @@ export default function App({ Component, pageProps }) {
       <AuthGuard>
         <Component {...pageProps} />
       </AuthGuard>
+      <Analytics />
     </>
   )
 }
