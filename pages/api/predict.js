@@ -1,19 +1,9 @@
 import { supabase } from '@/lib/supabaseClient';
 import * as turf from '@turf/turf';
-import fs from 'fs';
-import path from 'path';
+import coastlinePolygon from '../../lib/data/vietnam-coastline.json';
 
 // Changed from brain.js (requires C++ build tools on Windows) to synaptic (pure JS)
 const synaptic = require('synaptic');
-
-// Load Coastline Data
-let coastlinePolygon = null;
-try {
-  const filePath = path.join(process.cwd(), 'public', 'geojson', 'vietnam-coastline.json');
-  coastlinePolygon = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-} catch (e) {
-  console.log('Could not load coastline GeoJSON', e);
-}
 
 // Fallback dead reckoning logic if ML fails or doesn't have enough data
 function calculateNextPoint(lat, lng, speed, heading, timeHours) {

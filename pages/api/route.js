@@ -1,15 +1,5 @@
-import fs from 'fs';
-import path from 'path';
 import * as turf from '@turf/turf';
-
-// Load Coastline Data for obstacle avoidance
-let coastlineData = null;
-try {
-  const filePath = path.join(process.cwd(), 'public', 'geojson', 'vietnam-coastline.json');
-  coastlineData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-} catch (e) {
-  console.log('Could not load coastline GeoJSON for routing', e);
-}
+import coastlineData from '../../lib/data/vietnam-coastline.json';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
