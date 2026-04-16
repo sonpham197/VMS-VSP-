@@ -182,7 +182,7 @@ export default function Home() {
     setPredictedTracks([]);
     setActiveTrackData([]);
     try {
-      const res = await fetch('/api/route', {
+      const res = await fetch('/api/calculate-eta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
