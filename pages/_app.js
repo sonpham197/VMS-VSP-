@@ -4,6 +4,7 @@ import Head from 'next/head'
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { Loader2 } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/next';
 
 function AuthGuard({ children }) {
   const router = useRouter();
@@ -52,6 +53,7 @@ export default function App({ Component, pageProps }) {
       <AuthGuard>
         <Component {...pageProps} />
       </AuthGuard>
+      <Analytics />
     </>
   )
 }
