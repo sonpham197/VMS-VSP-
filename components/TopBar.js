@@ -9,13 +9,14 @@ export default function TopBar({ vessels = [] }) {
   useEffect(() => {
     const session = localStorage.getItem('vms_session');
     if (session) {
-      try { setCurrentUser(JSON.parse(session)); } catch {}
+      try { setCurrentUser(JSON.parse(session)); } catch { }
     }
   }, []);
 
-  const normalCount = vessels.filter(v => v?.status?.toLowerCase() === 'normal').length;
-  const warningCount = vessels.filter(v => v?.status?.toLowerCase() === 'warning').length;
-  const dangerCount = vessels.filter(v => v?.status?.toLowerCase() === 'danger').length;
+  const vList = Array.isArray(vessels) ? vessels : [];
+  const normalCount = vList.filter(v => (v?.status?.toLowerCase() || 'normal') === 'normal').length;
+  const warningCount = vList.filter(v => v?.status?.toLowerCase() === 'warning').length;
+  const dangerCount = vList.filter(v => v?.status?.toLowerCase() === 'danger').length;
 
   const handleLogout = () => {
     localStorage.removeItem('vms_session');
@@ -34,7 +35,7 @@ export default function TopBar({ vessels = [] }) {
           <span className="label">Total Vessels</span>
           <span className="value">{vessels.length}</span>
         </div>
-        
+
         <div className="divider"></div>
 
         <div className="stat-item status-normal">

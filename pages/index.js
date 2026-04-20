@@ -7,7 +7,7 @@ import AlertDrawer from '@/components/AlertDrawer';
 import { supabase } from '@/lib/supabaseClient';
 import { Bell } from 'lucide-react';
 
-const MapView = dynamic(() => import('@/components/MapView'), { 
+const MapView = dynamic(() => import('@/components/MapView'), {
   ssr: false,
   loading: () => (
     <div className="map-loading">
@@ -152,13 +152,13 @@ export default function Home() {
             .select('severity')
             .eq('vessel_id', targetVesselId)
             .eq('status', 'open');
-          
+
           let newStatus = 'normal'; // default if no open alerts
           if (vAlerts && vAlerts.length > 0) {
             newStatus = vAlerts.some(a => a.severity === 'danger') ? 'danger' : 'warning';
           }
 
-          setVessels(current => current.map(v => 
+          setVessels(current => current.map(v =>
             v.Vessel_id === targetVesselId ? { ...v, status: newStatus } : v
           ));
           setSelectedVessel(sv => sv && sv.Vessel_id === targetVesselId ? { ...sv, status: newStatus } : sv);
@@ -240,22 +240,22 @@ export default function Home() {
       const res = await fetch('/api/calculate-eta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          startLat: startVessel.lat, 
-          startLng: startVessel.lng, 
-          destLat, destLng, 
+        body: JSON.stringify({
+          startLat: startVessel.lat,
+          startLng: startVessel.lng,
+          destLat, destLng,
           speed: startVessel.speed,
           criteria
         })
       });
-      
+
       if (!res.ok) {
         const errText = await res.text();
         alert(`Lỗi API (${res.status}): ${errText.substring(0, 50)}...`);
         setIsPredicting(false);
         return;
       }
-      
+
       const data = await res.json();
       if (data.success) {
         setRouteData(data);
@@ -289,17 +289,17 @@ export default function Home() {
       <main className="layout">
         <div className="map-container" id="map-container">
           {isPredicting && (
-            <div style={{ position:'absolute',top:0,left:0,right:0,bottom:0,background:'rgba(15,23,42,0.7)',zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#38bdf8' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.7)', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#38bdf8' }}>
               <div className="spinner" />
-              <h3 style={{marginTop:'20px'}}>Hệ thống đang tính toán...</h3>
+              <h3 style={{ marginTop: '20px' }}>Hệ thống đang tính toán...</h3>
             </div>
           )}
-          <MapView 
-            vessels={vessels} 
-            tracks={activeTrackData} 
+          <MapView
+            vessels={vessels}
+            tracks={activeTrackData}
             predictedTracks={predictedTracks}
             routeData={routeData}
-            onSelectVessel={setSelectedVessel} 
+            onSelectVessel={setSelectedVessel}
             selectedVessel={selectedVessel}
             onTrackRequest={handleTrackRequest}
             onPredictionRequest={handlePredictionRequest}
@@ -309,15 +309,15 @@ export default function Home() {
         <Sidebar selectedVessel={selectedVessel} vessels={vessels} />
       </main>
 
-      <AlertDrawer 
-        isOpen={isAlertDrawerOpen} 
-        onClose={() => setIsAlertDrawerOpen(false)} 
+      <AlertDrawer
+        isOpen={isAlertDrawerOpen}
+        onClose={() => setIsAlertDrawerOpen(false)}
         onLocate={handleLocateAlert}
       />
 
       {/* Floating Alert Trigger Button */}
-      <button 
-        className="alert-trigger-btn" 
+      <button
+        className="alert-trigger-btn"
         onClick={() => setIsAlertDrawerOpen(true)}
       >
         <Bell size={20} />
