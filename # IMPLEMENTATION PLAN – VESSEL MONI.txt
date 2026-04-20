@@ -1,0 +1,372 @@
+# IMPLEMENTATION PLAN – VESSEL MONITORING ALERT SYSTEM (FOR ANTIGRAVITY)
+
+---
+
+## 1. Objective
+
+Upgrade the current Vessel Monitoring System (VMS) from **anomaly detection** to a **full alerting and maritime intelligence platform**.
+
+This implementation plan guides Antigravity to build:
+
+* Alert Engine
+* Real-time Detection
+* Notification System
+* Geo-fencing Intelligence
+* Scalable Architecture
+
+---
+
+## 2. Current System Baseline
+
+### Existing Components
+
+* `vessels`, `vessel_tracks`
+* `anomaly_rules`, `anomaly_events`
+* Detection via Edge Function (cron 5 min)
+* API endpoints for anomaly management
+
+### Limitations
+
+* No alert aggregation
+* No notification delivery
+* Not real-time
+* No geo-intelligence
+* No scalability layer
+
+---
+
+## 3. Target Architecture
+
+```
+Data Ingestion → Detection Engine → Alert Engine → Notification System → User Interface
+```
+
+### Core Services
+
+* Tracking Service
+* Detection Service
+* Alert Service
+* Notification Service
+* Geo Service
+
+---
+
+## 4. Phase 1 – Alert Engine (CORE)
+
+### 4.1 Database Schema
+
+```sql
+CREATE TABLE alerts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  vessel_id uuid,
+  rule_id uuid,
+  severity text,
+  status text DEFAULT 'open',
+  event_count int DEFAULT 1,
+  first_event_id uuid,
+  last_event_id uuid,
+  assigned_to uuid,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+```
+
+### 4.2 Logic
+
+* Group anomaly_events by:
+
+  * vessel_id
+  * rule_id
+  * time window (e.g. 15 minutes)
+* Avoid duplicate alerts
+* Increment `event_count`
+
+### 4.3 Alert Lifecycle
+
+```
+open → acknowledged → resolved → dismissed
+```
+
+### 4.4 Tasks for Antigravity
+
+* Create Alert Service (TypeScript)
+* Build aggregation logic
+* Implement update/merge strategy
+* Expose APIs:
+
+  * GET /alerts
+  * PATCH /alerts/:id
+
+---
+
+## 5. Phase 2 – Real-time Detection
+
+### 5.1 Replace Cron with Event-driven
+
+Current:
+
+* Supabase cron (5 minutes)
+
+Target:
+
+* Trigger on new `vessel_tracks` insert
+
+### 5.2 Implementation
+
+* Use Supabase Realtime or WebSocket
+* Process:
+
+  * current track
+  * previous track
+
+### 5.3 Detection Functions
+
+* checkDarkVessel
+* checkSpoofing
+* checkSpeedAnomaly
+* checkLoitering
+* checkRouteDeviation
+
+### 5.4 Requirements
+
+* Stateless functions
+* Idempotent execution
+* Low latency (<2s)
+
+---
+
+## 6. Phase 3 – Notification System
+
+### 6.1 Database Schema
+
+```sql
+CREATE TABLE notification_channels (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid,
+  type text,
+  config jsonb,
+  is_active boolean DEFAULT true
+);
+
+CREATE TABLE notification_logs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  alert_id uuid,
+  channel text,
+  status text,
+  sent_at timestamptz DEFAULT now()
+);
+```
+
+---
+
+### 6.2 Supported Channels
+
+* Email
+* Telegram Bot
+* Web Push
+* Webhook
+
+---
+
+### 6.3 Logic
+
+* Trigger on:
+
+  * New alert
+  * Severity escalation
+* Apply:
+
+  * Rate limiting
+  * Retry mechanism
+  * User preferences
+
+---
+
+### 6.4 Tasks
+
+* Build Notification Worker
+* Integrate Telegram Bot API
+* Implement retry queue
+
+---
+
+## 7. Phase 4 – Geo-fencing Intelligence
+
+### 7.1 Database
+
+```sql
+CREATE TABLE zones (
+  id uuid PRIMARY KEY,
+  name text,
+  type text,
+  geom geometry(POLYGON, 4326)
+);
+```
+
+---
+
+### 7.2 Features
+
+* Restricted zones
+* EEZ zones
+* Port areas
+
+---
+
+### 7.3 Detection
+
+* Enter / Exit zone
+* Dwell time
+* Illegal presence
+
+---
+
+### 7.4 Optimization
+
+* Use GIST index
+* PostGIS spatial queries
+
+---
+
+## 8. Phase 5 – Advanced Detection Enhancements
+
+### 8.1 Dark Vessel
+
+* Combine:
+
+  * AIS gap
+  * Expected route deviation
+
+### 8.2 Spoofing
+
+* Distance jump
+* Heading inconsistency
+
+### 8.3 Loitering
+
+* Replace convex hull with DBSCAN clustering
+
+### 8.4 Route Deviation
+
+* Buffer corridor instead of line distance
+
+---
+
+## 9. Phase 6 – Performance & Scalability
+
+### 9.1 Database
+
+* Migrate to TimescaleDB
+* Partition by time
+
+### 9.2 Processing
+
+* Batch processing per vessel
+* Introduce queue (Redis / PubSub)
+
+### 9.3 Caching
+
+* Redis for:
+
+  * last track
+  * vessel state
+
+---
+
+## 10. Phase 7 – API Design
+
+### Alerts
+
+```
+GET    /api/alerts
+GET    /api/alerts/:id
+PATCH  /api/alerts/:id
+```
+
+### Notifications
+
+```
+GET    /api/notifications
+POST   /api/notifications/test
+```
+
+### Rules
+
+```
+GET    /api/anomaly-rules
+PATCH  /api/anomaly-rules/:rule_code
+```
+
+---
+
+## 11. Phase 8 – Frontend Enhancements
+
+### Dashboard
+
+* Active alerts
+* Fleet status
+* Critical events map
+
+### Alert UI
+
+* Timeline
+* Status change
+* Assign operator
+
+### Map
+
+* Highlight anomaly zones
+* Show predicted vs actual path
+
+---
+
+## 12. Deployment Strategy
+
+### Environment
+
+* Supabase (DB + Realtime)
+* Vercel (Frontend + API)
+* Worker (Node.js service)
+
+### Steps
+
+1. Deploy DB schema
+2. Deploy Alert Service
+3. Deploy Notification Worker
+4. Enable Realtime Detection
+5. Release UI updates
+
+---
+
+## 13. Success Metrics
+
+* Alert latency < 5 seconds
+* False positive rate < 10%
+* System uptime > 99.9%
+* Scalable to >10,000 vessels
+
+---
+
+## 14. Final Deliverables for Antigravity
+
+Antigravity should generate:
+
+* Full SQL schema
+* Backend services (TypeScript)
+* Detection engine refactor
+* Notification worker
+* API endpoints
+* Basic frontend dashboard
+
+---
+
+## 15. Notes
+
+* Prioritize correctness over complexity
+* Ensure modular design
+* Keep detection logic configurable via rules
+* Avoid hardcoding thresholds
+
+---
+
+**End of Implementation Plan**

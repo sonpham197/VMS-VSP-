@@ -1,0 +1,218 @@
+import React, { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import { Bell, ShieldAlert, AlertTriangle, Info, CheckCircle, X, MapPin, ExternalLink } from 'lucide-react';
+
+export default function AlertDrawer({ isOpen, onClose, onLocate }) {
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchAlerts = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('alerts')
+      .select('*, vessels(Vessel_name)')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    
+    if (error) console.error('Error fetching alerts:', error);
+    else setAlerts(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchAlerts();
+
+    // Realtime subscription
+    const channel = supabase.channel('public:alerts_live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, payload => {
+        if (payload.eventType === 'INSERT') {
+          // Re-fetch to get vessel join or just update if we have enough info
+          fetchAlerts();
+        } else {
+          setAlerts(prev => prev.map(a => a.id === payload.new.id ? { ...a, ...payload.new } : a));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const handleAcknowledge = async (id) => {
+    const { error } = await supabase
+      .from('alerts')
+      .update({ status: 'acknowledged' })
+      .eq('id', id);
+    if (error) console.error(error);
+  };
+
+  const statusColors = {
+    danger: '#ef4444',
+    warning: '#f59e0b',
+    info: '#3b82f6'
+  };
+
+  const getAlertIcon = (severity) => {
+    switch (severity) {
+      case 'danger': return <ShieldAlert size={20} color={statusColors.danger} />;
+      case 'warning': return <AlertTriangle size={20} color={statusColors.warning} />;
+      default: return <Info size={20} color={statusColors.info} />;
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="alert-drawer-overlay">
+      <div className="alert-drawer">
+        <div className="drawer-header">
+          <div className="header-title">
+            <Bell size={22} className="bell-icon" />
+            <h2>Cảnh báo hệ thống</h2>
+            <span className="count-badge">{alerts.filter(a => a.status === 'open').length}</span>
+          </div>
+          <button className="close-btn" onClick={onClose}><X size={24} /></button>
+        </div>
+
+        <div className="drawer-content">
+          {loading ? (
+            <div className="empty-state">Đang tải cảnh báo...</div>
+          ) : alerts.length === 0 ? (
+            <div className="empty-state">Không có cảnh báo nào</div>
+          ) : (
+            alerts.map(alert => (
+              <div 
+                key={alert.id} 
+                className={`alert-card ${alert.status}`}
+                style={{ borderLeft: `4px solid ${statusColors[alert.severity] || '#ccc'}` }}
+              >
+                <div className="alert-card-header">
+                  {getAlertIcon(alert.severity)}
+                  <span className="vessel-name">{alert.vessels?.Vessel_name || alert.vessel_id}</span>
+                  <span className="alert-time">{new Date(alert.created_at).toLocaleTimeString()}</span>
+                </div>
+                
+                <div className="alert-body">
+                  <p className="alert-description">{alert.description}</p>
+                  {alert.event_count > 1 && (
+                    <div className="event-badge">Đã diễn ra {alert.event_count} lần</div>
+                  )}
+                </div>
+
+                <div className="alert-actions">
+                  <button className="action-btn map" onClick={() => onLocate(alert)}>
+                    <MapPin size={16} /> Định vị
+                  </button>
+                  {alert.status === 'open' && (
+                    <button className="action-btn ack" onClick={() => handleAcknowledge(alert.id)}>
+                      <CheckCircle size={16} /> Chấp nhận
+                    </button>
+                  )}
+                  {alert.status === 'acknowledged' && (
+                    <span className="status-label"><CheckCircle size={14} /> Đã tiếp nhận</span>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <style jsx>{`
+        .alert-drawer-overlay {
+          position: fixed;
+          top: 0;
+          right: 0;
+          bottom: 0;
+          left: 0;
+          background: rgba(0, 0, 0, 0.4);
+          z-index: 10000;
+          display: flex;
+          justify-content: flex-end;
+          backdrop-filter: blur(4px);
+        }
+        .alert-drawer {
+          width: 400px;
+          background: #0f172a;
+          height: 100%;
+          box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+          display: flex;
+          flex-direction: column;
+          animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
+        }
+        .drawer-header {
+          padding: 24px;
+          border-bottom: 1px solid rgba(255,255,255,0.08);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        .header-title { display: flex; align-items: center; gap: 12px; }
+        .header-title h2 { font-size: 1.25rem; font-weight: 600; color: #f8fafc; margin: 0; }
+        .bell-icon { color: #38bdf8; }
+        .count-badge {
+          background: #ef4444;
+          color: white;
+          font-size: 0.75rem;
+          padding: 2px 8px;
+          border-radius: 12px;
+          font-weight: 700;
+        }
+        .close-btn { background: none; border: none; color: #94a3b8; cursor: pointer; }
+        .drawer-content { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+        .empty-state { text-align: center; color: #64748b; margin-top: 40px; }
+        
+        .alert-card {
+          background: #1e293b;
+          border-radius: 12px;
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          transition: transform 0.2s;
+        }
+        .alert-card.acknowledged { opacity: 0.7; }
+        .alert-card-header { display: flex; align-items: center; gap: 8px; }
+        .vessel-name { font-weight: 700; color: #f1f5f9; flex: 1; }
+        .alert-time { font-size: 0.75rem; color: #64748b; }
+        
+        .alert-description { font-size: 0.875rem; color: #cbd5e1; margin: 0; line-height: 1.5; }
+        .event-badge { 
+          display: inline-block; 
+          margin-top: 8px; 
+          font-size: 0.7rem; 
+          background: rgba(255,255,255,0.05); 
+          padding: 2px 8px; 
+          border-radius: 4px; 
+          color: #94a3b8; 
+        }
+        
+        .alert-actions { display: flex; gap: 12px; margin-top: 4px; }
+        .action-btn {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 8px;
+          border-radius: 6px;
+          font-size: 0.8rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+          border: none;
+        }
+        .action-btn.map { background: #334155; color: #f1f5f9; }
+        .action-btn.map:hover { background: #475569; }
+        .action-btn.ack { background: #059669; color: white; }
+        .action-btn.ack:hover { background: #10b981; }
+        .status-label { font-size: 0.8rem; color: #10b981; display: flex; align-items: center; gap: 4px; }
+      `}</style>
+    </div>
+  );
+}

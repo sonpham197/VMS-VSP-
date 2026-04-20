@@ -3,7 +3,9 @@ import dynamic from 'next/dynamic';
 import Head from 'next/head';
 import Sidebar from '@/components/Sidebar';
 import TopBar from '@/components/TopBar';
+import AlertDrawer from '@/components/AlertDrawer';
 import { supabase } from '@/lib/supabaseClient';
+import { Bell } from 'lucide-react';
 
 const MapView = dynamic(() => import('@/components/MapView'), { 
   ssr: false,
@@ -23,6 +25,7 @@ export default function Home() {
   const [routeData, setRouteData] = useState(null);
   const [isPredicting, setIsPredicting] = useState(false);
   const [selectedVessel, setSelectedVessel] = useState(null);
+  const [isAlertDrawerOpen, setIsAlertDrawerOpen] = useState(false);
 
   // ── Merge static vessel info + latest track position ─────────────────────
   const mergeVesselsWithTracks = useCallback((statics, latestTracks) => {
@@ -60,7 +63,27 @@ export default function Home() {
         }
       }
 
-      setVessels(mergeVesselsWithTracks(statics, latestTracks));
+      // 3. Fetch all OPEN alerts to calculate dynamic status
+      const { data: aData, error: aError } = await supabase
+        .from('alerts')
+        .select('*')
+        .eq('status', 'open');
+      if (aError) { console.error('Error fetching alerts:', aError); }
+      const openAlerts = aData || [];
+
+      // 4. Final Merge: Static + Latest Track + Open Alerts
+      const merged = mergeVesselsWithTracks(statics, latestTracks);
+      const finalVessels = merged.map(v => {
+        const vesselAlerts = openAlerts.filter(a => a.vessel_id === v.Vessel_id);
+        if (vesselAlerts.length > 0) {
+          // If has danger alerts, status is danger. If only warnings, status is warning.
+          const hasDanger = vesselAlerts.some(a => a.severity === 'danger');
+          return { ...v, status: hasDanger ? 'danger' : 'warning' };
+        }
+        return v;
+      });
+
+      setVessels(finalVessels);
     };
 
     fetchInitialData();
@@ -114,9 +137,41 @@ export default function Home() {
       })
       .subscribe();
 
+    // Listen to alerts table for status overrides
+    const alertsSub = supabase.channel('public:alerts_status')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, payload => {
+        // We re-fetch all open alerts or just update the one vessel
+        // To be safe and handle severity hierarchies, let's re-calculate for this vessel
+        const targetVesselId = payload.new?.vessel_id || payload.old?.vessel_id;
+        if (!targetVesselId) return;
+
+        // Perform a quick check for all open alerts for this vessel
+        const updateVesselStatus = async () => {
+          const { data: vAlerts } = await supabase
+            .from('alerts')
+            .select('severity')
+            .eq('vessel_id', targetVesselId)
+            .eq('status', 'open');
+          
+          let newStatus = 'normal'; // default if no open alerts
+          if (vAlerts && vAlerts.length > 0) {
+            newStatus = vAlerts.some(a => a.severity === 'danger') ? 'danger' : 'warning';
+          }
+
+          setVessels(current => current.map(v => 
+            v.Vessel_id === targetVesselId ? { ...v, status: newStatus } : v
+          ));
+          setSelectedVessel(sv => sv && sv.Vessel_id === targetVesselId ? { ...sv, status: newStatus } : sv);
+        };
+
+        updateVesselStatus();
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(tracksSub);
       supabase.removeChannel(vesselsSub);
+      supabase.removeChannel(alertsSub);
     };
   }, []);
 
@@ -207,10 +262,19 @@ export default function Home() {
       } else {
         alert('Lỗi tính toán hải trình: ' + data.error);
       }
-    } catch (err) { 
-      alert('Lỗi mạng khi gọi API Route: ' + err.message); 
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi khi tính toán hải trình');
     }
     setIsPredicting(false);
+  };
+
+  const handleLocateAlert = (alert) => {
+    const vessel = vessels.find(v => v.Vessel_id === alert.vessel_id);
+    if (vessel) {
+      setSelectedVessel(vessel);
+      setIsAlertDrawerOpen(false);
+    }
   };
 
   return (
@@ -245,11 +309,44 @@ export default function Home() {
         <Sidebar selectedVessel={selectedVessel} vessels={vessels} />
       </main>
 
+      <AlertDrawer 
+        isOpen={isAlertDrawerOpen} 
+        onClose={() => setIsAlertDrawerOpen(false)} 
+        onLocate={handleLocateAlert}
+      />
+
+      {/* Floating Alert Trigger Button */}
+      <button 
+        className="alert-trigger-btn" 
+        onClick={() => setIsAlertDrawerOpen(true)}
+      >
+        <Bell size={20} />
+      </button>
+
       <style jsx>{`
         .layout { display:flex; height:calc(100vh - 64px); width:100vw; overflow:hidden; background-color:#0f172a; }
         .map-container { flex:3; position:relative; }
         .map-loading { width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background-color:#1e293b; color:#94a3b8; font-size:1.125rem; gap:16px; }
         .spinner { width:40px; height:40px; border:4px solid rgba(255,255,255,0.1); border-left-color:#3b82f6; border-radius:50%; animation:spin 1s linear infinite; }
+        .alert-trigger-btn {
+          position: fixed;
+          bottom: 24px;
+          right: 24px;
+          width: 56px;
+          height: 56px;
+          border-radius: 28px;
+          background: #ef4444;
+          color: white;
+          border: none;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+          cursor: pointer;
+          z-index: 99;
+          transition: transform 0.2s, background 0.2s;
+        }
+        .alert-trigger-btn:hover { transform: scale(1.1); background: #f87171; }
         @keyframes spin { 0%{transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
       `}</style>
     </>

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, Tooltip, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, Tooltip, useMap, useMapEvents, Polygon } from 'react-leaflet';
+import { supabase } from '@/lib/supabaseClient';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import WeatherPanel from './WeatherPanel';
@@ -27,7 +28,11 @@ const createCustomIcon = (status, heading) => {
 
   return L.divIcon({
     className: 'custom-vessel-icon',
-    html: `<div style="transform: rotate(${heading || 0}deg); width:24px; height:24px; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));">${svgIcon}</div>`,
+    html: `
+      <div class="pulsing-container ${status === 'danger' ? 'pulsing-danger' : ''}" style="transform: rotate(${heading || 0}deg); width:24px; height:24px; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));">
+        ${svgIcon}
+      </div>
+    `,
     iconSize: [24, 24],
     iconAnchor: [12, 12],
     popupAnchor: [0, -12]
@@ -48,7 +53,37 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
   const [contextMenu, setContextMenu] = useState(null);
   const [mapContextMenu, setMapContextMenu] = useState(null);
   const [weatherVessel, setWeatherVessel] = useState(null);
+  const [zones, setZones] = useState([]);
   const [routeCriteria, setRouteCriteria] = useState({ time: true, fuel: false, risk: false, weather: false });
+  useEffect(() => {
+    const fetchZones = async () => {
+      const { data, error } = await supabase.from('zones_wkt_view').select('*');
+      if (!error && data) {
+        // Convert PostGIS geometry WKT or similar to Leaflet latlngs if needed
+        // but since we seeded them as POLYGON((...)), they might need parsing
+        // or we use a View that returns GeoJSON.
+        // For simplicity in seeding, let's assume we can parse basic WKT.
+        setZones(data);
+      }
+    };
+    fetchZones();
+  }, []);
+
+  // Helper to parse WKT POLYGON((...)) to [[lat, lng], ...]
+  const parseWKT = (wkt) => {
+    if (!wkt || typeof wkt !== 'string') return [];
+    try {
+      const coordsPart = wkt.replace('POLYGON((', '').replace('))', '');
+      return coordsPart.split(',').map(pair => {
+        const [lng, lat] = pair.trim().split(' ').map(Number);
+        return [lat, lng];
+      });
+    } catch (e) {
+      console.error("WKT parse error:", e);
+      return [];
+    }
+  };
+
   // Group tracks by Vessel_id
   const tracksByVessel = useMemo(() => {
     const grouped = {};
@@ -94,6 +129,29 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
       
       <MapUpdater selectedVessel={selectedVessel} />
       <MapEventsHandler />
+
+      {/* Render Zones */}
+      {zones.map(zone => (
+        <Polygon
+          key={zone.id}
+          positions={parseWKT(zone.geom_wkt)}
+          pathOptions={{
+            color: zone.severity === 'danger' ? '#ef4444' : '#f59e0b',
+            fillColor: zone.severity === 'danger' ? '#ef4444' : '#f59e0b',
+            fillOpacity: 0.15,
+            dashArray: zone.severity === 'warning' ? '10, 10' : 'none',
+            weight: 2
+          }}
+        >
+          <Tooltip sticky direction="top" opacity={0.9}>
+            <div style={{ textAlign: 'center' }}>
+              <strong style={{color: zone.severity === 'danger' ? '#ef4444' : '#fbbf24'}}>{zone.name.toUpperCase()}</strong><br/>
+              {zone.description}<br/>
+              <span style={{fontSize: '0.8em', color: '#94a3b8'}}>Mức độ: {zone.severity?.toUpperCase()}</span>
+            </div>
+          </Tooltip>
+        </Polygon>
+      ))}
 
       {/* Render Polylines for historical tracks */}
       {Object.entries(tracksByVessel).map(([vesselId, vesselTracks]) => {
@@ -268,6 +326,24 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
         .custom-vessel-icon {
           background: transparent;
           border: none;
+        }
+        .custom-vessel-icon .pulsing-container {
+           width: 24px;
+           height: 24px;
+           position: relative;
+        }
+        .pulsing-danger::after {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; width: 100%; height: 100%;
+          border-radius: 50%;
+          background: rgba(239, 68, 68, 0.6);
+          animation: mapPulse 1.5s infinite ease-out;
+          z-index: -1;
+        }
+        @keyframes mapPulse {
+          0% { transform: scale(1); opacity: 1; }
+          100% { transform: scale(2.5); opacity: 0; }
         }
         .leaflet-tooltip {
           background: #1e293b;

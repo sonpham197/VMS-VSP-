@@ -7,9 +7,9 @@ import {
 } from 'lucide-react';
 
 const STATUS_CONFIG = {
-  normal:  { color: '#34d399', bg: 'rgba(16,185,129,0.15)', label: 'BÌNH THƯỜNG' },
-  warning: { color: '#fbbf24', bg: 'rgba(245,158,11,0.15)',  label: 'CẢNH BÁO'   },
-  danger:  { color: '#f87171', bg: 'rgba(239,68,68,0.15)',   label: 'NGUY HIỂM'  },
+  normal:  { color: '#10b981', bg: 'rgba(16,185,129,0.1)',  label: 'BÌNH THƯỜNG', glow: 'rgba(16,185,129,0.3)' },
+  warning: { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  label: 'CẢNH BÁO',   glow: 'rgba(245,158,11,0.3)'  },
+  danger:  { color: '#ef4444', bg: 'rgba(239,68,68,0.1)',   label: 'NGUY HIỂM',  glow: 'rgba(239,68,68,0.3)'   },
 };
 
 const FLAGS = {
@@ -85,7 +85,12 @@ export default function Sidebar({ selectedVessel }) {
 
           {/* Status + Name */}
           <div className="vessel-hero">
-            <div className="status-badge" style={{ color: statusCfg.color, background: statusCfg.bg }}>
+            <div className="status-badge" style={{ 
+              color: statusCfg.color, 
+              background: statusCfg.bg,
+              border: `1px solid ${statusCfg.color}33`,
+              boxShadow: `0 0 15px ${statusCfg.glow}`
+            }}>
               <span className="status-dot" style={{ background: statusCfg.color }} />
               {statusCfg.label}
             </div>
@@ -198,9 +203,9 @@ export default function Sidebar({ selectedVessel }) {
         .vessel-img { width: 100%; height: 100%; object-fit: cover; }
         .vessel-img-overlay { position: absolute; bottom: 0; left: 0; right: 0; height: 50%; background: linear-gradient(to top, var(--bg-sidebar), transparent); }
         .vessel-hero { padding: 16px 20px 12px; }
-        .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; margin-bottom: 8px; }
-        .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; animation: pulse 2s infinite; }
-        @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+        .status-badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; margin-bottom: 12px; backdrop-filter: blur(4px); }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; animation: statusPulse 1.5s infinite; }
+        @keyframes statusPulse { 0%{transform:scale(1); opacity:1; box-shadow: 0 0 0 0 currentColor;} 70%{transform:scale(1.1); opacity:0.7; box-shadow: 0 0 0 6px rgba(0,0,0,0);} 100%{transform:scale(1); opacity:1; box-shadow: 0 0 0 0 rgba(0,0,0,0);} }
         .vessel-name { font-size: 1.25rem; font-weight: 800; margin: 0 0 6px; color: #f1f5f9; line-height: 1.2; }
         .vessel-type-tag { display: inline-block; background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.2); color: #38bdf8; border-radius: 6px; padding: 2px 10px; font-size: 0.72rem; font-weight: 600; }
         .section-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #475569; padding: 12px 20px 4px; }
