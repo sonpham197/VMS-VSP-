@@ -136,9 +136,9 @@ export default function TopBar({ vessels = [] }) {
           height: 24px;
           background: rgba(255, 255, 255, 0.1);
         }
-        .status-normal { color: #34d399; }
-        .status-warning { color: #fbbf24; }
-        .status-danger { color: #f87171; }
+        .status-normal { color: #10b981; }
+        .status-warning { color: #f59e0b; }
+        .status-danger { color: #ef4444; }
         .status-normal .label, .status-warning .label, .status-danger .label {
           color: inherit;
           opacity: 0.8;

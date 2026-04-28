@@ -10,6 +10,7 @@ const STATUS_CONFIG = {
   normal:  { color: '#10b981', bg: 'rgba(16,185,129,0.1)',  label: 'BÌNH THƯỜNG', glow: 'rgba(16,185,129,0.3)' },
   warning: { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  label: 'CẢNH BÁO',   glow: 'rgba(245,158,11,0.3)'  },
   danger:  { color: '#ef4444', bg: 'rgba(239,68,68,0.1)',   label: 'NGUY HIỂM',  glow: 'rgba(239,68,68,0.3)'   },
+  unknown: { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)', label: 'KHÔNG CÓ TÍN HIỆU', glow: 'rgba(148,163,184,0.15)' },
 };
 
 const FLAGS = {
@@ -38,7 +39,7 @@ function InfoRow({ icon, label, value }) {
   );
 }
 
-export default function Sidebar({ selectedVessel }) {
+export default function Sidebar({ selectedVessel, vessels = [] }) {
   const router = useRouter();
   const [bgColor, setBgColor] = useState('#0f172a'); // default dark sidebar bg
 
@@ -53,7 +54,17 @@ export default function Sidebar({ selectedVessel }) {
     localStorage.setItem('sidebarBgColor', hex);
   };
 
-  const statusCfg = STATUS_CONFIG[selectedVessel?.status?.toLowerCase()] || STATUS_CONFIG.normal;
+  const statusCfg = STATUS_CONFIG[selectedVessel?.status?.toLowerCase()] || STATUS_CONFIG.unknown;
+
+  // Vessel counts for sidebar stats panel
+  const vList = Array.isArray(vessels) ? vessels : [];
+  const counts = {
+    total:   vList.length,
+    normal:  vList.filter(v => v?.status?.toLowerCase() === 'normal').length,
+    warning: vList.filter(v => v?.status?.toLowerCase() === 'warning').length,
+    danger:  vList.filter(v => v?.status?.toLowerCase() === 'danger').length,
+    unknown: vList.filter(v => !v?.status || v?.status?.toLowerCase() === 'unknown').length,
+  };
 
   return (
     <div className="sidebar" style={{ background: bgColor }}>
@@ -175,6 +186,37 @@ export default function Sidebar({ selectedVessel }) {
           </div>
           <p className="empty-title">Chưa chọn tàu</p>
           <p className="empty-sub">Nhấp chuột phải vào tàu trên bản đồ để xem thông tin và hành trình.</p>
+
+          {/* Status counts panel */}
+          {counts.total > 0 && (
+            <div className="sidebar-counts">
+              <div className="counts-title">Tổng quan đội tàu</div>
+              <div className="counts-grid">
+                <div className="count-cell total">
+                  <span className="count-num">{counts.total}</span>
+                  <span className="count-lbl">Tổng</span>
+                </div>
+                <div className="count-cell normal">
+                  <span className="count-num">{counts.normal}</span>
+                  <span className="count-lbl">Bình thường</span>
+                </div>
+                <div className="count-cell warning">
+                  <span className="count-num">{counts.warning}</span>
+                  <span className="count-lbl">Cảnh báo</span>
+                </div>
+                <div className="count-cell danger">
+                  <span className="count-num">{counts.danger}</span>
+                  <span className="count-lbl">Nguy hiểm</span>
+                </div>
+                {counts.unknown > 0 && (
+                  <div className="count-cell unknown">
+                    <span className="count-num">{counts.unknown}</span>
+                    <span className="count-lbl">Mất tín hiệu</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -224,6 +266,17 @@ export default function Sidebar({ selectedVessel }) {
         .empty-icon { color: #334155; }
         .empty-title { font-size: 1rem; font-weight: 600; color: #64748b; margin: 0; }
         .empty-sub { font-size: 0.8rem; color: #475569; line-height: 1.6; margin: 0; }
+        .sidebar-counts { width: 100%; margin-top: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 14px 12px; }
+        .counts-title { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #475569; margin-bottom: 10px; }
+        .counts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        .count-cell { display: flex; flex-direction: column; align-items: center; padding: 10px 8px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); }
+        .count-num { font-size: 1.4rem; font-weight: 800; line-height: 1; }
+        .count-lbl { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px; opacity: 0.8; }
+        .count-cell.total { background: rgba(248,250,252,0.05); color: #f8fafc; }
+        .count-cell.normal { background: rgba(16,185,129,0.08); color: #10b981; }
+        .count-cell.warning { background: rgba(245,158,11,0.08); color: #f59e0b; }
+        .count-cell.danger { background: rgba(239,68,68,0.08); color: #ef4444; }
+        .count-cell.unknown { background: rgba(148,163,184,0.06); color: #94a3b8; }
       `}</style>
     </div>
   );

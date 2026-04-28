@@ -26,17 +26,25 @@ CREATE OR REPLACE FUNCTION process_vessel_track_alerts(
     p_lat double precision,
     p_lng double precision,
     p_speed double precision,
-    p_track_id uuid
+    p_track_id bigint 
 )
 RETURNS void AS $$
 DECLARE
     r_zone RECORD;
     v_rule_id uuid;
     v_alert_id uuid;
+    v_track_status text := 'normal';
 BEGIN
     -- [A] KIỂM TRA VI PHẠM VÙNG CẤM
     FOR r_zone IN SELECT * FROM check_zone_violation(p_lat, p_lng) LOOP
         
+        -- Cập nhật v_track_status nếu severity của zone cao hơn hiện tại
+        IF r_zone.zone_severity = 'danger' THEN
+            v_track_status := 'danger';
+        ELSIF r_zone.zone_severity = 'warning' AND v_track_status = 'normal' THEN
+            v_track_status := 'warning';
+        END IF;
+
         -- Lấy rule_id cho ZONE_VIOLATION
         SELECT id INTO v_rule_id FROM anomaly_rules WHERE code = 'ZONE_VIOLATION';
 
@@ -71,8 +79,12 @@ BEGIN
     END LOOP;
 
     -- [B] KIỂM TRA QUÁ TỐC ĐỘ
-    -- (Giả sử threshold là 25 knots từ rule)
     IF p_speed > 25 THEN
+        -- Cập nhật status lên warning nếu đang là normal
+        IF v_track_status = 'normal' THEN
+            v_track_status := 'warning';
+        END IF;
+
         SELECT id INTO v_rule_id FROM anomaly_rules WHERE code = 'SPEED_LIMIT';
         
         SELECT id INTO v_alert_id 
@@ -91,6 +103,9 @@ BEGIN
             WHERE id = v_alert_id;
         END IF;
     END IF;
+
+    -- [C] CẬP NHẬT TRẠNG THÁI VÀO BẢNG TRACKS (Vị trí hiện tại)
+    UPDATE vessel_tracks SET status = v_track_status WHERE id = p_track_id;
 
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import Head from 'next/head';
 import Sidebar from '@/components/Sidebar';
@@ -18,162 +18,174 @@ const MapView = dynamic(() => import('@/components/MapView'), {
 });
 
 export default function Home() {
-  const [vessels, setVessels] = useState([]);        // merged: static info + latest track
-  const [vesselStatics, setVesselStatics] = useState([]); // raw static vessel info
+  const [vesselStatics, setVesselStatics] = useState([]);
+  const [latestTracks, setLatestTracks] = useState({}); // { vesselId: { trackData } }
+  const [openAlerts, setOpenAlerts] = useState([]);     // list of all open alerts
   const [activeTrackData, setActiveTrackData] = useState([]);
   const [predictedTracks, setPredictedTracks] = useState([]);
   const [routeData, setRouteData] = useState(null);
   const [isPredicting, setIsPredicting] = useState(false);
-  const [selectedVessel, setSelectedVessel] = useState(null);
+  const [selectedVesselId, setSelectedVesselId] = useState(null);
   const [isAlertDrawerOpen, setIsAlertDrawerOpen] = useState(false);
 
-  // ── Merge static vessel info + latest track position ─────────────────────
-  const mergeVesselsWithTracks = useCallback((statics, latestTracks) => {
-    return statics.map(v => {
-      const latest = latestTracks.find(t => t.Vessel_id === v.Vessel_id) || {};
-      return { ...v, ...latest };
+  // ── Derived State: Merged Vessels ────────────────────────────────────────
+  const vessels = useMemo(() => {
+    return vesselStatics.map(v => {
+      const track = latestTracks[v.Vessel_id];
+      const vAlerts = openAlerts.filter(a => a.vessel_id === v.Vessel_id);
+
+      // Nếu chưa có track → trạng thái 'unknown' (hiển thị màu xám)
+      // Nếu có track → lấy status từ track, mặc định 'normal'
+      let status = track ? (track.status || 'normal') : 'unknown';
+
+      // Alert override: nếu có alert mở → đè lên status từ track
+      if (vAlerts.length > 0) {
+        const hasDanger = vAlerts.some(a =>
+          a.severity === 'danger' || a.severity === 'critical' || a.severity === 'high'
+        );
+        status = hasDanger ? 'danger' : 'warning';
+      }
+
+      return {
+        ...v,
+        ...(track || {}),
+        Vessel_id: v.Vessel_id, // Ensure consistent casing for child components
+        status // Alert status takes precedence
+      };
     });
-  }, []);
+  }, [vesselStatics, latestTracks, openAlerts]);
+
+  const selectedVessel = useMemo(() => 
+    vessels.find(v => v.Vessel_id === selectedVesselId),
+  [vessels, selectedVesselId]);
 
   // ── Initial Data Fetch ────────────────────────────────────────────────────
   useEffect(() => {
     const fetchInitialData = async () => {
-      // 1. Fetch static vessel info (IMO, MMSI, image, etc.)
-      const { data: vData, error: vError } = await supabase
-        .from('vessels')
-        .select('*');
-      if (vError) { console.error('Error fetching vessels:', vError); return; }
-      const statics = vData || [];
-      setVesselStatics(statics);
+      // 1. Fetch static vessel info
+      const { data: vData } = await supabase.from('vessels').select('*');
+      if (vData) setVesselStatics(vData);
 
-      // 2. Fetch latest track per vessel for current position
-      // Note: 'status' column added by migration — fall back to 'normal' if missing
+      // 2. Fetch latest track per vessel
       const { data: tData, error: tError } = await supabase
         .from('vessel_tracks')
-        .select('Vessel_id, Vessel_name, lat, lng, speed, heading, created_at')
+        .select('*')
         .order('created_at', { ascending: false });
-      if (tError) { console.error('Error fetching latest tracks:', tError); }
-
-      const latestTracks = [];
-      const seen = new Set();
-      for (const t of (tData || [])) {
-        if (!seen.has(t.Vessel_id)) {
-          seen.add(t.Vessel_id);
-          latestTracks.push({ ...t, status: t.status || 'normal' });
-        }
+      
+      if (!tError && tData) {
+        const latest = {};
+        tData.forEach(t => {
+          const vid = t.Vessel_id || t.vessel_id;
+          if (vid && !latest[vid]) latest[vid] = t;
+        });
+        setLatestTracks(latest);
       }
 
-      // 3. Fetch all OPEN alerts to calculate dynamic status
+      // NOTE: vessel_tracks status is updated AFTER INSERT by a trigger.
+      // We re-fetch tracks after a short delay to get the trigger-updated status.
+      setTimeout(async () => {
+        const { data: tData2 } = await supabase
+          .from('vessel_tracks')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (tData2) {
+          const latest2 = {};
+          tData2.forEach(t => {
+            const vid = t.Vessel_id || t.vessel_id;
+            if (vid && !latest2[vid]) latest2[vid] = t;
+          });
+          setLatestTracks(latest2);
+        }
+      }, 3000);
+
+      // 3. Fetch all OPEN alerts
       const { data: aData, error: aError } = await supabase
         .from('alerts')
         .select('*')
         .eq('status', 'open');
-      if (aError) { console.error('Error fetching alerts:', aError); }
-      const openAlerts = aData || [];
-
-      // 4. Final Merge: Static + Latest Track + Open Alerts
-      const merged = mergeVesselsWithTracks(statics, latestTracks);
-      const finalVessels = merged.map(v => {
-        const vesselAlerts = openAlerts.filter(a => a.vessel_id === v.Vessel_id);
-        if (vesselAlerts.length > 0) {
-          // If has danger alerts, status is danger. If only warnings, status is warning.
-          const hasDanger = vesselAlerts.some(a => a.severity === 'danger');
-          return { ...v, status: hasDanger ? 'danger' : 'warning' };
-        }
-        return v;
-      });
-
-      setVessels(finalVessels);
+      
+      if (!aError && aData) setOpenAlerts(aData);
     };
 
     fetchInitialData();
-  }, [mergeVesselsWithTracks]);
+  }, []);
 
-  // ── Realtime Subscriptions ────────────────────────────────────────────────
+  // ── Helper: fetch latest tracks ────────────────────────────────────────────
+  const refreshLatestTracks = useCallback(async () => {
+    const { data } = await supabase
+      .from('vessel_tracks')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (data) {
+      const latest = {};
+      data.forEach(t => {
+        const vid = t.Vessel_id || t.vessel_id;
+        if (vid && !latest[vid]) latest[vid] = t;
+      });
+      setLatestTracks(latest);
+    }
+  }, []);
+
+  // ── Realtime + Polling ──────────────────────────────────────────────────
   useEffect(() => {
-    // Listen to vessel_tracks for position updates
+    // A) Realtime: cập nhật vị trí + status khi có track INSERT hoặc UPDATE
+    // Trigger SQL cập nhật status vào vessel_tracks sau INSERT → cần lắng nghe UPDATE
     const tracksSub = supabase.channel('public:vessel_tracks_live')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vessel_tracks' }, payload => {
         const newTrack = payload.new;
-        setVessels(current =>
-          current.map(v =>
-            v.Vessel_id === newTrack.Vessel_id
-              ? { ...v, lat: newTrack.lat, lng: newTrack.lng, speed: newTrack.speed, heading: newTrack.heading, status: newTrack.status, created_at: newTrack.created_at }
-              : v
-          )
-        );
-        // Update selectedVessel position too
-        setSelectedVessel(sv => sv && sv.Vessel_id === newTrack.Vessel_id
-          ? { ...sv, lat: newTrack.lat, lng: newTrack.lng, speed: newTrack.speed, heading: newTrack.heading, status: newTrack.status }
-          : sv
-        );
+        const vid = newTrack.Vessel_id || newTrack.vessel_id;
+        if (vid) {
+          setLatestTracks(prev => ({ ...prev, [vid]: newTrack }));
+          // Trigger SQL updates status separately after insert → re-fetch after short delay
+          setTimeout(() => refreshLatestTracks(), 2000);
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'vessel_tracks' }, payload => {
+        // Triggered when the detection function updates the status field
+        const updatedTrack = payload.new;
+        const vid = updatedTrack.Vessel_id || updatedTrack.vessel_id;
+        if (vid) {
+          setLatestTracks(prev => {
+            // Only replace if this is the latest track for this vessel
+            const existing = prev[vid];
+            if (!existing || new Date(updatedTrack.created_at) >= new Date(existing.created_at)) {
+              return { ...prev, [vid]: updatedTrack };
+            }
+            return prev;
+          });
+        }
       })
       .subscribe();
 
-    // Listen to vessels table for static info changes (IMO, image, etc.)
-    const vesselsSub = supabase.channel('public:vessels_static')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'vessels' }, payload => {
-        setVesselStatics(current => {
-          let updated;
-          if (payload.eventType === 'INSERT') updated = [...current, payload.new];
-          else if (payload.eventType === 'UPDATE') updated = current.map(v => v.Vessel_id === payload.new.Vessel_id ? payload.new : v);
-          else if (payload.eventType === 'DELETE') updated = current.filter(v => v.Vessel_id !== payload.old.Vessel_id);
-          else updated = current;
-          return updated;
-        });
-        setVessels(prev => {
-          if (payload.eventType === 'INSERT') {
-            return [...prev, payload.new]; // new vessel, no track yet
-          } else if (payload.eventType === 'UPDATE') {
-            return prev.map(v => v.Vessel_id === payload.new.Vessel_id
-              ? { ...v, ...payload.new }
-              : v
-            );
-          } else if (payload.eventType === 'DELETE') {
-            return prev.filter(v => v.Vessel_id !== payload.old.Vessel_id);
-          }
-          return prev;
-        });
+    // B) Realtime: lắng nghe bảng alerts (hoạt động nếu đã bật Realtime trên Supabase)
+    const alertsSub = supabase.channel('public:alerts_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, () => {
+        // Khi có bất kỳ thay đổi nào trong alerts → re-fetch toàn bộ open alerts
+        supabase.from('alerts').select('*').eq('status', 'open')
+          .then(({ data }) => { if (data) setOpenAlerts(data); });
       })
       .subscribe();
 
-    // Listen to alerts table for status overrides
-    const alertsSub = supabase.channel('public:alerts_status')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, payload => {
-        // We re-fetch all open alerts or just update the one vessel
-        // To be safe and handle severity hierarchies, let's re-calculate for this vessel
-        const targetVesselId = payload.new?.vessel_id || payload.old?.vessel_id;
-        if (!targetVesselId) return;
+    // C) Polling dự phòng: cứ 10 giây cập nhật lại cả open alerts VÀ latest tracks
+    // (Đảm bảo hoạt động ngay cả khi Realtime chưa bật)
+    const pollInterval = setInterval(async () => {
+      // Poll alerts
+      const { data: alertData } = await supabase
+        .from('alerts')
+        .select('*')
+        .eq('status', 'open');
+      if (alertData) setOpenAlerts(alertData);
 
-        // Perform a quick check for all open alerts for this vessel
-        const updateVesselStatus = async () => {
-          const { data: vAlerts } = await supabase
-            .from('alerts')
-            .select('severity')
-            .eq('vessel_id', targetVesselId)
-            .eq('status', 'open');
-
-          let newStatus = 'normal'; // default if no open alerts
-          if (vAlerts && vAlerts.length > 0) {
-            newStatus = vAlerts.some(a => a.severity === 'danger') ? 'danger' : 'warning';
-          }
-
-          setVessels(current => current.map(v =>
-            v.Vessel_id === targetVesselId ? { ...v, status: newStatus } : v
-          ));
-          setSelectedVessel(sv => sv && sv.Vessel_id === targetVesselId ? { ...sv, status: newStatus } : sv);
-        };
-
-        updateVesselStatus();
-      })
-      .subscribe();
+      // Poll tracks để bắt status updates từ trigger SQL
+      await refreshLatestTracks();
+    }, 10000);
 
     return () => {
       supabase.removeChannel(tracksSub);
-      supabase.removeChannel(vesselsSub);
       supabase.removeChannel(alertsSub);
+      clearInterval(pollInterval);
     };
-  }, []);
+  }, [refreshLatestTracks]);
 
   // ── Track History Request ─────────────────────────────────────────────────
   const handleTrackRequest = async (vesselId, hours) => {
@@ -270,11 +282,8 @@ export default function Home() {
   };
 
   const handleLocateAlert = (alert) => {
-    const vessel = vessels.find(v => v.Vessel_id === alert.vessel_id);
-    if (vessel) {
-      setSelectedVessel(vessel);
-      setIsAlertDrawerOpen(false);
-    }
+    setSelectedVesselId(alert.vessel_id);
+    setIsAlertDrawerOpen(false);
   };
 
   return (
@@ -299,7 +308,7 @@ export default function Home() {
             tracks={activeTrackData}
             predictedTracks={predictedTracks}
             routeData={routeData}
-            onSelectVessel={setSelectedVessel}
+            onSelectVessel={(v) => setSelectedVesselId(v.Vessel_id)}
             selectedVessel={selectedVessel}
             onTrackRequest={handleTrackRequest}
             onPredictionRequest={handlePredictionRequest}

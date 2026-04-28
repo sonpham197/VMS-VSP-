@@ -12,7 +12,7 @@ BEGIN
         NEW.lat,
         NEW.lng,
         NEW.speed,
-        NEW.id -- Giả định vessel_tracks có cột id là uuid
+        NEW.id -- vessel_tracks uses BIGINT for ID
     );
     RETURN NEW;
 END;
