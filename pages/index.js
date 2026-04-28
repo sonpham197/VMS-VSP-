@@ -66,17 +66,18 @@ export default function Home() {
       const { data: vData } = await supabase.from('vessels').select('*');
       if (vData) setVesselStatics(vData);
 
-      // 2. Fetch latest track per vessel
+      // 2. Fetch latest track per vessel using the optimized view
       const { data: tData, error: tError } = await supabase
-        .from('vessel_tracks')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .from('vessel_current_positions')
+        .select('Vessel_id, lat, lng, speed, heading, status, last_seen');
       
       if (!tError && tData) {
         const latest = {};
         tData.forEach(t => {
-          const vid = t.Vessel_id || t.vessel_id;
-          if (vid && !latest[vid]) latest[vid] = t;
+          if (t.Vessel_id && t.lat !== null) {
+            // Map the view format back to track format
+            latest[t.Vessel_id] = { ...t, created_at: t.last_seen };
+          }
         });
         setLatestTracks(latest);
       }
@@ -85,14 +86,14 @@ export default function Home() {
       // We re-fetch tracks after a short delay to get the trigger-updated status.
       setTimeout(async () => {
         const { data: tData2 } = await supabase
-          .from('vessel_tracks')
-          .select('*')
-          .order('created_at', { ascending: false });
+          .from('vessel_current_positions')
+          .select('Vessel_id, lat, lng, speed, heading, status, last_seen');
         if (tData2) {
           const latest2 = {};
           tData2.forEach(t => {
-            const vid = t.Vessel_id || t.vessel_id;
-            if (vid && !latest2[vid]) latest2[vid] = t;
+            if (t.Vessel_id && t.lat !== null) {
+              latest2[t.Vessel_id] = { ...t, created_at: t.last_seen };
+            }
           });
           setLatestTracks(latest2);
         }
@@ -113,14 +114,14 @@ export default function Home() {
   // ── Helper: fetch latest tracks ────────────────────────────────────────────
   const refreshLatestTracks = useCallback(async () => {
     const { data } = await supabase
-      .from('vessel_tracks')
-      .select('*')
-      .order('created_at', { ascending: false });
+      .from('vessel_current_positions')
+      .select('Vessel_id, lat, lng, speed, heading, status, last_seen');
     if (data) {
       const latest = {};
       data.forEach(t => {
-        const vid = t.Vessel_id || t.vessel_id;
-        if (vid && !latest[vid]) latest[vid] = t;
+        if (t.Vessel_id && t.lat !== null) {
+          latest[t.Vessel_id] = { ...t, created_at: t.last_seen };
+        }
       });
       setLatestTracks(latest);
     }
