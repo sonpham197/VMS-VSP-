@@ -88,6 +88,11 @@ export default function Home() {
         }
       }
 
+      // Client-side speed limit check (>25 knots = warning)
+      if (track && track.speed > 25 && status === 'normal') {
+        status = 'warning';
+      }
+
       return {
         ...v,
         ...(track || {}),
