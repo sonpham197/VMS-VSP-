@@ -17,10 +17,36 @@ const MapView = dynamic(() => import('@/components/MapView'), {
   )
 });
 
+// ── Helpers: WKT parsing & Point-in-Polygon ─────────────────────────────
+function parseWKT(wkt) {
+  if (!wkt || typeof wkt !== 'string') return [];
+  try {
+    const coordsPart = wkt.replace('POLYGON((', '').replace('))', '');
+    return coordsPart.split(',').map(pair => {
+      const [lng, lat] = pair.trim().split(' ').map(Number);
+      return [lat, lng];
+    });
+  } catch { return []; }
+}
+
+function pointInPolygon(lat, lng, polygon) {
+  if (!polygon || polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const yi = polygon[i][0], xi = polygon[i][1];
+    const yj = polygon[j][0], xj = polygon[j][1];
+    if (((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
 export default function Home() {
   const [vesselStatics, setVesselStatics] = useState([]);
   const [latestTracks, setLatestTracks] = useState({}); // { vesselId: { trackData } }
   const [openAlerts, setOpenAlerts] = useState([]);     // list of all open alerts
+  const [zones, setZones] = useState([]);               // zone polygons for client-side check
   const [activeTrackData, setActiveTrackData] = useState([]);
   const [predictedTracks, setPredictedTracks] = useState([]);
   const [routeData, setRouteData] = useState(null);
@@ -30,6 +56,12 @@ export default function Home() {
 
   // ── Derived State: Merged Vessels ────────────────────────────────────────
   const vessels = useMemo(() => {
+    // Pre-parse zone polygons once
+    const parsedZones = zones.map(z => ({
+      severity: z.severity,
+      polygon: parseWKT(z.geom_wkt),
+    })).filter(z => z.polygon.length >= 3);
+
     return vesselStatics.map(v => {
       const track = latestTracks[v.Vessel_id];
       const vAlerts = openAlerts.filter(a => a.vessel_id === v.Vessel_id);
@@ -46,14 +78,24 @@ export default function Home() {
         status = hasDanger ? 'danger' : 'warning';
       }
 
+      // Client-side zone violation check (fallback when SQL trigger isn't active)
+      if (track && track.lat != null && track.lng != null && status === 'normal') {
+        for (const z of parsedZones) {
+          if (pointInPolygon(track.lat, track.lng, z.polygon)) {
+            if (z.severity === 'danger') { status = 'danger'; break; }
+            if (z.severity === 'warning' && status !== 'danger') { status = 'warning'; }
+          }
+        }
+      }
+
       return {
         ...v,
         ...(track || {}),
         Vessel_id: v.Vessel_id, // Ensure consistent casing for child components
-        status // Alert status takes precedence
+        status // Alert/zone status takes precedence
       };
     });
-  }, [vesselStatics, latestTracks, openAlerts]);
+  }, [vesselStatics, latestTracks, openAlerts, zones]);
 
   const selectedVessel = useMemo(() => 
     vessels.find(v => v.Vessel_id === selectedVesselId),
@@ -106,6 +148,10 @@ export default function Home() {
         .eq('status', 'open');
       
       if (!aError && aData) setOpenAlerts(aData);
+
+      // 4. Fetch zone polygons for client-side violation check
+      const { data: zData } = await supabase.from('zones_wkt_view').select('*');
+      if (zData) setZones(zData);
     };
 
     fetchInitialData();
