@@ -6,6 +6,9 @@ Hệ thống Giám sát Tàu thuyền (Vessel Monitoring System - VMS) là một
 ### Các tính năng chính:
 - **Theo dõi thời gian thực (Real-time Tracking)**: Hiển thị vị trí tàu tức thời trên bản đồ tương tác.
 - **Phân tích lịch sử**: Truy xuất và hiển thị quỹ đạo di chuyển của tàu trong quá khứ (1h, 12h, 24h...).
+- **Quản lý Đội tàu (Fleet Grouping)**: Tạo và quản lý các nhóm tàu tùy chỉnh, bộ lọc động và gán màu sắc định danh trên bản đồ.
+- **Vùng cảnh báo cá nhân (Custom Geofencing)**: Vẽ và quản lý đa giác khép kín để thiết lập cảnh báo vào/ra khu vực (cảng, vùng cấm).
+- **Lớp phủ Thời tiết (Weather Overlays)**: Hiển thị lớp bản đồ hàng hải và khí tượng (OpenSeaMap) phục vụ điều hướng an toàn.
 - **Dự báo quỹ đạo AI**: Sử dụng mạng thần kinh LSTM để dự đoán hướng đi của tàu trong tương lai (4h - 24h).
 - **Tối ưu lộ trình (ETA Optimization)**: Tính toán đường đi ngắn nhất tránh vật cả đất liền và đề xuất lộ trình tối ưu dựa trên hàm chi phí linh hoạt.
 
@@ -56,6 +59,13 @@ Lưu trữ các điểm dữ liệu lịch sử và vị trí hiện tại.
 - `heading`: Hướng tàu (0-360 độ).
 - `status`: Trạng thái (Normal, Warning, Danger).
 - `created_at`: Thời điểm ghi nhận dữ liệu (Timestamp).
+
+### 3.3 Bảng `zones` và Cảnh báo (Alerts)
+- **zones**: Quản lý các vùng cảnh báo, vùng cấm, cảng biển. Tích hợp `PostGIS` với cột `geom` kiểu `geometry(Polygon, 4326)` để phân tích không gian. Dữ liệu được hỗ trợ hiển thị và vẽ tương tác ngay trên Frontend.
+- **alerts**: Quản lý các cảnh báo được sinh ra (vi phạm tốc độ, đi vào vùng cấm) thông qua các trigger SQL tự động.
+
+### 3.4 Quản lý Khách hàng và Đội tàu
+- Các bảng mở rộng như `Customer`, `customer_fleets` và `fleet_vessels` (chứa quan hệ giữa khách hàng và tàu) cho phép thiết lập chế độ đa người dùng (Multi-tenant). Tuy nhiên, hiện tại Front-end cũng hỗ trợ lưu trữ trạng thái Fleet thông qua `LocalStorage` để linh hoạt thử nghiệm.
 
 ---
 
