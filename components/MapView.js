@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, Tooltip, useMap, useMapEvents, Polygon } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, Tooltip, Popup, useMap, useMapEvents, Polygon } from 'react-leaflet';
 import { supabase } from '@/lib/supabaseClient';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -10,15 +10,16 @@ import WeatherPanel from './WeatherPanel';
 
 const getStatusColor = (status) => {
   switch (status?.toLowerCase()) {
-    case 'normal': return '#10b981'; // green
+    case 'normal':  return '#10b981'; // green
     case 'warning': return '#f59e0b'; // orange
-    case 'danger': return '#ef4444'; // red
-    default: return '#94a3b8'; // slate
+    case 'danger':  return '#ef4444'; // red
+    case 'unknown': return '#94a3b8'; // slate gray
+    default:        return '#94a3b8'; // slate gray (no track)
   }
 };
 
-const createCustomIcon = (status, heading) => {
-  const color = getStatusColor(status);
+const createCustomIcon = (status, heading, fleetColor) => {
+  const color = fleetColor || getStatusColor(status);
   // Basic ship shape svg pointing upwards. We rotate the wrapper.
   const svgIcon = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${color}" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="24" height="24">
@@ -49,12 +50,19 @@ function MapUpdater({ selectedVessel }) {
   return null;
 }
 
-export default function MapView({ vessels, tracks, predictedTracks = [], routeData = null, onSelectVessel, selectedVessel, onTrackRequest, onPredictionRequest, onRouteRequest }) {
+export default function MapView({ vessels, tracks, predictedTracks = [], routeData = null, onSelectVessel, selectedVessel, onTrackRequest, onPredictionRequest, onRouteRequest, onZoneDrawn, onZoneDelete }) {
   const [contextMenu, setContextMenu] = useState(null);
   const [mapContextMenu, setMapContextMenu] = useState(null);
   const [weatherVessel, setWeatherVessel] = useState(null);
+  const [showSeamark, setShowSeamark] = useState(false);
   const [zones, setZones] = useState([]);
   const [routeCriteria, setRouteCriteria] = useState({ time: true, fuel: false, risk: false, weather: false });
+  
+  // Drawing states
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawnPoints, setDrawnPoints] = useState([]); // [{lat, lng}]
+  const [mousePos, setMousePos] = useState(null);
+
   useEffect(() => {
     const fetchZones = async () => {
       const { data, error } = await supabase.from('zones_wkt_view').select('*');
@@ -104,6 +112,11 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
   function MapEventsHandler() {
     useMapEvents({
       contextmenu: (e) => {
+        if (isDrawing) {
+          e.originalEvent.preventDefault();
+          handleCancelDrawing();
+          return;
+        }
         if (selectedVessel) {
           e.originalEvent.preventDefault();
           setMapContextMenu({
@@ -112,20 +125,81 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
             lat: e.latlng.lat,
             lng: e.latlng.lng
           });
-          setContextMenu(null); // close vessel context menu if open
+          setContextMenu(null);
+        }
+      },
+      click: (e) => {
+        if (isDrawing) {
+          setDrawnPoints(prev => [...prev, e.latlng]);
+        }
+      },
+      mousemove: (e) => {
+        if (isDrawing) {
+          setMousePos(e.latlng);
+        }
+      },
+      dblclick: (e) => {
+        if (isDrawing) {
+          e.originalEvent.preventDefault();
+          handleFinishDrawing();
         }
       }
     });
     return null;
   }
 
+  const handleFinishDrawing = () => {
+    // Lọc các điểm trùng lặp liên tiếp
+    const distinctPoints = drawnPoints.filter((p, i, arr) => {
+      if (i === 0) return true;
+      return p.lat !== arr[i-1].lat || p.lng !== arr[i-1].lng;
+    });
+
+    if (distinctPoints.length < 3) {
+      alert("Cần ít nhất 3 điểm phân biệt để tạo vùng!");
+      return;
+    }
+
+    // Kiểm tra đa giác bẹt (diện tích xấp xỉ 0 bằng công thức Shoelace đơn giản cho hệ toạ độ phẳng nhỏ)
+    let area = 0;
+    for (let i = 0; i < distinctPoints.length; i++) {
+      let j = (i + 1) % distinctPoints.length;
+      area += distinctPoints[i].lng * distinctPoints[j].lat - distinctPoints[j].lng * distinctPoints[i].lat;
+    }
+    area = Math.abs(area / 2);
+    if (area < 1e-10) {
+      alert("Vùng vừa vẽ là đa giác bẹt (không có diện tích hợp lệ). Vui lòng vẽ lại!");
+      setDrawnPoints([]);
+      return;
+    }
+
+    if (typeof onZoneDrawn === 'function') {
+      onZoneDrawn(distinctPoints);
+    }
+    setIsDrawing(false);
+    setDrawnPoints([]);
+    setMousePos(null);
+  };
+
+  const handleCancelDrawing = () => {
+    setIsDrawing(false);
+    setDrawnPoints([]);
+    setMousePos(null);
+  };
+
   return (
     <>
-    <MapContainer center={defaultCenter} zoom={defaultZoom} zoomControl={false} style={{ width: '100%', height: '100%' }}>
+    <MapContainer center={defaultCenter} zoom={defaultZoom} zoomControl={false} style={{ width: '100%', height: '100%', cursor: isDrawing ? 'crosshair' : 'grab' }}>
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
       />
+      {showSeamark && (
+        <TileLayer
+          attribution='&copy; <a href="http://www.openseamap.org">OpenSeaMap</a> contributors'
+          url="https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png"
+        />
+      )}
       
       <MapUpdater selectedVessel={selectedVessel} />
       <MapEventsHandler />
@@ -143,21 +217,42 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
             weight: 2
           }}
         >
-          <Tooltip sticky direction="top" opacity={0.9}>
-            <div style={{ textAlign: 'center' }}>
+          <Popup>
+            <div style={{ textAlign: 'center', minWidth: '150px' }}>
               <strong style={{color: zone.severity === 'danger' ? '#ef4444' : '#fbbf24'}}>{zone.name.toUpperCase()}</strong><br/>
-              {zone.description}<br/>
-              <span style={{fontSize: '0.8em', color: '#94a3b8'}}>Mức độ: {zone.severity?.toUpperCase()}</span>
+              {zone.description && <span style={{fontSize: '0.9em'}}>{zone.description}<br/></span>}
+              <span style={{fontSize: '0.8em', color: '#64748b'}}>Mức độ: {zone.severity?.toUpperCase()}</span><br/>
+              <button 
+                onClick={(e) => { e.stopPropagation(); onZoneDelete && onZoneDelete(zone.id); }}
+                style={{marginTop: '8px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontSize: '0.8em'}}
+              >🗑️ Xóa vùng này</button>
             </div>
-          </Tooltip>
+          </Popup>
         </Polygon>
       ))}
+
+      {/* Render Active Drawing */}
+      {isDrawing && drawnPoints.length > 0 && (
+        <React.Fragment>
+          {/* Use Polygon instead of Polyline for drawing closure if there are >= 2 points + mousePos */}
+          <Polygon 
+            positions={[
+              ...drawnPoints.map(p => [p.lat, p.lng]),
+              ...(mousePos ? [[mousePos.lat, mousePos.lng]] : [])
+            ]} 
+            color="#38bdf8" weight={2} dashArray="5,5" fillColor="#38bdf8" fillOpacity={0.1}
+          />
+          {drawnPoints.map((p, idx) => (
+            <CircleMarker key={idx} center={[p.lat, p.lng]} radius={4} color="#38bdf8" fillColor="white" fillOpacity={1} />
+          ))}
+        </React.Fragment>
+      )}
 
       {/* Render Polylines for historical tracks */}
       {Object.entries(tracksByVessel).map(([vesselId, vesselTracks]) => {
         // Find current vessel to get status color, fallback to default
         const currentVessel = vessels.find(v => v.Vessel_id === vesselId);
-        const color = getStatusColor(currentVessel?.status);
+        const color = currentVessel?.fleetColor || getStatusColor(currentVessel?.status);
         
         const positions = vesselTracks
           .filter(t => t.lat && t.lng)
@@ -293,9 +388,9 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
       {/* Render Markers for current positions */}
       {vessels.filter(v => v.lat && v.lng).map(vessel => (
         <Marker
-          key={`marker-${vessel.id}`}
+          key={`marker-${vessel.id || vessel.Vessel_id}`}
           position={[vessel.lat, vessel.lng]}
-          icon={createCustomIcon(vessel.status, vessel.heading)}
+          icon={createCustomIcon(vessel.status, vessel.heading, vessel.fleetColor)}
           eventHandlers={{
             click: () => onSelectVessel(vessel),
             contextmenu: (e) => {
@@ -322,6 +417,26 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
       <style jsx global>{`
         .leaflet-container {
           background-color: #242424; /* Prevents white flash before tiles load */
+        }
+        .map-overlay-controls {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          z-index: 1000;
+          background: rgba(15, 23, 42, 0.8);
+          backdrop-filter: blur(8px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          padding: 8px 12px;
+          color: white;
+        }
+        .control-label {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 0.85rem;
+          font-weight: 600;
+          cursor: pointer;
         }
         .custom-vessel-icon {
           background: transparent;
@@ -428,8 +543,39 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
           background: rgba(239,68,68,0.08);
           color: #f87171;
         }
+        .draw-btn {
+          width: 100%; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.3); color: #38bdf8; border-radius: 6px; padding: 6px 10px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;
+        }
+        .draw-btn:hover { background: rgba(56,189,248,0.25); }
+        .draw-btn-save {
+          width: 100%; background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); color: #10b981; border-radius: 6px; padding: 6px 10px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;
+        }
+        .draw-btn-save:hover { background: rgba(16,185,129,0.25); }
+        .draw-btn-cancel {
+          width: 100%; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; border-radius: 6px; padding: 6px 10px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;
+        }
+        .draw-btn-cancel:hover { background: rgba(239,68,68,0.25); }
       `}</style>
     </MapContainer>
+
+      {/* Map Controls */}
+      <div className="map-overlay-controls">
+        <label className="control-label">
+          <input type="checkbox" checked={showSeamark} onChange={(e) => setShowSeamark(e.target.checked)} />
+          <span>🌊 Lớp Hàng hải & Thời tiết</span>
+        </label>
+        <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          {!isDrawing ? (
+            <button className="draw-btn" onClick={() => setIsDrawing(true)}>✏️ Vẽ Vùng Cảnh báo</button>
+          ) : (
+            <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+              <span style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>Click trên bản đồ để tạo điểm.</span>
+              <button className="draw-btn-save" onClick={handleFinishDrawing}>✅ Hoàn tất ({drawnPoints.length} điểm)</button>
+              <button className="draw-btn-cancel" onClick={handleCancelDrawing}>❌ Huỷ</button>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Floating Context Menu moved outside MapContainer */}
       {contextMenu && (

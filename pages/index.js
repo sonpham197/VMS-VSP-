@@ -5,7 +5,9 @@ import Sidebar from '@/components/Sidebar';
 import TopBar from '@/components/TopBar';
 import AlertDrawer from '@/components/AlertDrawer';
 import { supabase } from '@/lib/supabaseClient';
-import { Bell } from 'lucide-react';
+import { Bell, Layers } from 'lucide-react';
+import FleetManager from '@/components/FleetManager';
+import ZoneModal from '@/components/ZoneModal';
 
 const MapView = dynamic(() => import('@/components/MapView'), {
   ssr: false,
@@ -53,6 +55,17 @@ export default function Home() {
   const [isPredicting, setIsPredicting] = useState(false);
   const [selectedVesselId, setSelectedVesselId] = useState(null);
   const [isAlertDrawerOpen, setIsAlertDrawerOpen] = useState(false);
+  const [fleets, setFleets] = useState([]);
+  const [selectedFleetId, setSelectedFleetId] = useState('all');
+  const [showFleetManager, setShowFleetManager] = useState(false);
+  const [drawnZonePoints, setDrawnZonePoints] = useState(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('vms_fleets');
+    if (saved) {
+      try { setFleets(JSON.parse(saved)); } catch {}
+    }
+  }, []);
 
   // ── Derived State: Merged Vessels ────────────────────────────────────────
   const vessels = useMemo(() => {
@@ -102,9 +115,21 @@ export default function Home() {
     });
   }, [vesselStatics, latestTracks, openAlerts, zones]);
 
+  // Filtered vessels based on selected fleet
+  const filteredVessels = useMemo(() => {
+    if (selectedFleetId === 'all') return vessels;
+    const fleet = fleets.find(f => f.id === selectedFleetId);
+    if (!fleet) return vessels;
+    // Gán màu fleet vào vessel để hiển thị trên map (tuỳ chọn)
+    return vessels.filter(v => fleet.vessels.includes(v.Vessel_id)).map(v => ({
+      ...v,
+      fleetColor: fleet.color
+    }));
+  }, [vessels, selectedFleetId, fleets]);
+
   const selectedVessel = useMemo(() => 
-    vessels.find(v => v.Vessel_id === selectedVesselId),
-  [vessels, selectedVesselId]);
+    filteredVessels.find(v => v.Vessel_id === selectedVesselId),
+  [filteredVessels, selectedVesselId]);
 
   // ── Initial Data Fetch ────────────────────────────────────────────────────
   useEffect(() => {
@@ -338,6 +363,17 @@ export default function Home() {
     setIsAlertDrawerOpen(false);
   };
 
+  const handleZoneDelete = async (zoneId) => {
+    if (!confirm('Bạn có chắc muốn xoá vùng cảnh báo này?')) return;
+    try {
+      const { error } = await supabase.from('zones').delete().eq('id', zoneId);
+      if (error) throw error;
+      setZones(prev => prev.filter(z => z.id !== zoneId));
+    } catch (err) {
+      alert('Lỗi khi xoá vùng: ' + err.message);
+    }
+  };
+
   return (
     <>
       <Head>
@@ -345,7 +381,13 @@ export default function Home() {
         <meta name="description" content="Realtime Vessel Monitoring System" />
       </Head>
 
-      <TopBar vessels={vessels} />
+      <TopBar 
+        vessels={vessels} 
+        fleets={fleets}
+        selectedFleetId={selectedFleetId}
+        onSelectFleet={setSelectedFleetId}
+        onManageFleets={() => setShowFleetManager(true)}
+      />
 
       <main className="layout">
         <div className="map-container" id="map-container">
@@ -356,7 +398,7 @@ export default function Home() {
             </div>
           )}
           <MapView
-            vessels={vessels}
+            vessels={filteredVessels}
             tracks={activeTrackData}
             predictedTracks={predictedTracks}
             routeData={routeData}
@@ -365,9 +407,11 @@ export default function Home() {
             onTrackRequest={handleTrackRequest}
             onPredictionRequest={handlePredictionRequest}
             onRouteRequest={handleRouteRequest}
+            onZoneDrawn={setDrawnZonePoints}
+            onZoneDelete={handleZoneDelete}
           />
         </div>
-        <Sidebar selectedVessel={selectedVessel} vessels={vessels} />
+        <Sidebar selectedVessel={selectedVessel} vessels={filteredVessels} />
       </main>
 
       <AlertDrawer
@@ -375,6 +419,22 @@ export default function Home() {
         onClose={() => setIsAlertDrawerOpen(false)}
         onLocate={handleLocateAlert}
       />
+
+      {showFleetManager && (
+        <FleetManager 
+          vessels={vessels} 
+          onClose={() => setShowFleetManager(false)}
+          onFleetsChange={setFleets}
+        />
+      )}
+
+      {drawnZonePoints && (
+        <ZoneModal
+          points={drawnZonePoints}
+          onClose={() => setDrawnZonePoints(null)}
+          onSaved={(newZone) => setZones(prev => [...prev, newZone])}
+        />
+      )}
 
       {/* Floating Alert Trigger Button */}
       <button

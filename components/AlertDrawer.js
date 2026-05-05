@@ -11,6 +11,7 @@ export default function AlertDrawer({ isOpen, onClose, onLocate }) {
     const { data, error } = await supabase
       .from('alerts')
       .select('*, vessels(Vessel_name)')
+      .in('status', ['open', 'acknowledged'])   // chỉ lấy alerts còn hoạt động
       .order('created_at', { ascending: false })
       .limit(50);
     
@@ -26,10 +27,22 @@ export default function AlertDrawer({ isOpen, onClose, onLocate }) {
     const channel = supabase.channel('public:alerts_live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, payload => {
         if (payload.eventType === 'INSERT') {
-          // Re-fetch to get vessel join or just update if we have enough info
+          // Re-fetch để lấy dữ liệu join với vessels
           fetchAlerts();
-        } else {
-          setAlerts(prev => prev.map(a => a.id === payload.new.id ? { ...a, ...payload.new } : a));
+        } else if (payload.eventType === 'UPDATE') {
+          // Nếu alert bị resolved → xóa khỏi danh sách
+          if (payload.new.status === 'resolved' || payload.new.status === 'dismissed') {
+            setAlerts(prev => prev.filter(a => a.id !== payload.new.id));
+          } else {
+            // Cập nhật nhưng giữ nguyên trường join (vessels)
+            setAlerts(prev => prev.map(a =>
+              a.id === payload.new.id
+                ? { ...payload.new, vessels: a.vessels }  // giữ lại vessels join
+                : a
+            ));
+          }
+        } else if (payload.eventType === 'DELETE') {
+          setAlerts(prev => prev.filter(a => a.id !== payload.old.id));
         }
       })
       .subscribe();

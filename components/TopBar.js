@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { BarChart2, ShieldAlert, AlertTriangle, CheckCircle2, Users, LogOut, Ship } from 'lucide-react';
+import { BarChart2, ShieldAlert, AlertTriangle, CheckCircle2, Users, LogOut, Ship, Layers, Settings } from 'lucide-react';
 
-export default function TopBar({ vessels = [] }) {
+export default function TopBar({ vessels = [], fleets = [], selectedFleetId = 'all', onSelectFleet, onManageFleets }) {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState(null);
 
@@ -14,9 +14,10 @@ export default function TopBar({ vessels = [] }) {
   }, []);
 
   const vList = Array.isArray(vessels) ? vessels : [];
-  const normalCount = vList.filter(v => (v?.status?.toLowerCase() || 'normal') === 'normal').length;
+  const normalCount = vList.filter(v => v?.status?.toLowerCase() === 'normal').length;
   const warningCount = vList.filter(v => v?.status?.toLowerCase() === 'warning').length;
   const dangerCount = vList.filter(v => v?.status?.toLowerCase() === 'danger').length;
+  const unknownCount = vList.filter(v => !v?.status || v?.status?.toLowerCase() === 'unknown').length;
 
   const handleLogout = () => {
     localStorage.removeItem('vms_session');
@@ -55,9 +56,33 @@ export default function TopBar({ vessels = [] }) {
           <span className="label">Danger</span>
           <span className="value">{dangerCount}</span>
         </div>
+
+        {unknownCount > 0 && (
+          <>
+            <div className="divider"></div>
+            <div className="stat-item status-unknown">
+              <Ship size={18} className="icon" />
+              <span className="label">No Signal</span>
+              <span className="value">{unknownCount}</span>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="nav-area">
+        {onSelectFleet && (
+          <div className="fleet-selector">
+            <Layers size={16} className="fs-icon" />
+            <select value={selectedFleetId} onChange={e => onSelectFleet(e.target.value)}>
+              <option value="all">Tất cả đội tàu</option>
+              {fleets.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+            <button className="manage-fleets-btn" onClick={onManageFleets} title="Quản lý Nhóm">
+              <Settings size={14} />
+            </button>
+          </div>
+        )}
+
         <button className="nav-btn vessels-btn" onClick={() => router.push('/vessels')}>
           <Ship size={16} />
           <span>Tàu</span>
@@ -139,7 +164,8 @@ export default function TopBar({ vessels = [] }) {
         .status-normal { color: #10b981; }
         .status-warning { color: #f59e0b; }
         .status-danger { color: #ef4444; }
-        .status-normal .label, .status-warning .label, .status-danger .label {
+        .status-unknown { color: #94a3b8; }
+        .status-normal .label, .status-warning .label, .status-danger .label, .status-unknown .label {
           color: inherit;
           opacity: 0.8;
         }
@@ -148,6 +174,48 @@ export default function TopBar({ vessels = [] }) {
           align-items: center;
           gap: 10px;
           flex-shrink: 0;
+        }
+        .fleet-selector {
+          display: flex;
+          align-items: center;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 10px;
+          padding: 2px;
+          margin-right: 10px;
+        }
+        .fs-icon {
+          color: #94a3b8;
+          margin: 0 8px;
+        }
+        .fleet-selector select {
+          background: transparent;
+          border: none;
+          color: white;
+          font-size: 0.85rem;
+          outline: none;
+          padding: 6px 4px;
+          cursor: pointer;
+        }
+        .fleet-selector select option {
+          background: #1e293b;
+        }
+        .manage-fleets-btn {
+          background: rgba(255,255,255,0.08);
+          border: none;
+          color: #94a3b8;
+          border-radius: 8px;
+          padding: 6px;
+          margin-left: 4px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        }
+        .manage-fleets-btn:hover {
+          background: rgba(56,189,248,0.2);
+          color: #38bdf8;
         }
         .nav-btn {
           display: flex;
