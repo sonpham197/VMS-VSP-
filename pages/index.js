@@ -405,13 +405,17 @@ export default function Home() {
             onSelectVessel={(v) => setSelectedVesselId(v.Vessel_id)}
             selectedVessel={selectedVessel}
             onTrackRequest={handleTrackRequest}
+            onClearTracks={() => setActiveTrackData([])}
             onPredictionRequest={handlePredictionRequest}
+            onClearPrediction={() => setPredictedTracks([])}
             onRouteRequest={handleRouteRequest}
             onZoneDrawn={setDrawnZonePoints}
             onZoneDelete={handleZoneDelete}
           />
         </div>
-        <Sidebar selectedVessel={selectedVessel} vessels={filteredVessels} />
+        <div className={`sidebar-container ${selectedVesselId ? 'open' : ''}`}>
+          <Sidebar selectedVessel={selectedVessel} vessels={filteredVessels} onClose={() => setSelectedVesselId(null)} />
+        </div>
       </main>
 
       <AlertDrawer
@@ -445,8 +449,23 @@ export default function Home() {
       </button>
 
       <style jsx>{`
-        .layout { display:flex; height:calc(100vh - 64px); width:100vw; overflow:hidden; background-color:#0f172a; }
-        .map-container { flex:3; position:relative; }
+        .layout { display:flex; height:calc(100vh - 64px); width:100vw; overflow:hidden; background-color:#0f172a; position: relative; }
+        .map-container { flex:1; position:relative; width: 100%; height: 100%; }
+        .sidebar-container {
+          position: absolute;
+          top: 0;
+          right: 0;
+          height: 100%;
+          width: 360px;
+          background: #1e293b;
+          transform: translateX(100%);
+          transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          z-index: 1000;
+          box-shadow: -5px 0 25px rgba(0,0,0,0.5);
+        }
+        .sidebar-container.open {
+          transform: translateX(0);
+        }
         .map-loading { width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background-color:#1e293b; color:#94a3b8; font-size:1.125rem; gap:16px; }
         .spinner { width:40px; height:40px; border:4px solid rgba(255,255,255,0.1); border-left-color:#3b82f6; border-radius:50%; animation:spin 1s linear infinite; }
         .alert-trigger-btn {

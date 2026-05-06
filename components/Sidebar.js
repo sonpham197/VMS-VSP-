@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import {
   Ship, Navigation, Activity, Clock, Hash,
   Anchor, Flag, Ruler, Weight, Calendar, User,
-  MapPin, BarChart2, Info, ExternalLink, Palette
+  MapPin, BarChart2, Info, ExternalLink, Palette, X
 } from 'lucide-react';
 
 const STATUS_CONFIG = {
@@ -39,7 +39,7 @@ function InfoRow({ icon, label, value }) {
   );
 }
 
-export default function Sidebar({ selectedVessel, vessels = [] }) {
+export default function Sidebar({ selectedVessel, vessels = [], onClose }) {
   const router = useRouter();
   const [bgColor, setBgColor] = useState('#0f172a'); // default dark sidebar bg
 
@@ -86,6 +86,12 @@ export default function Sidebar({ selectedVessel, vessels = [] }) {
 
       {selectedVessel ? (
         <div className="vessel-info">
+          {/* Close button */}
+          {onClose && (
+            <button className="close-btn" onClick={onClose} style={{ position: 'absolute', top: '15px', right: '15px', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', zIndex: 11 }}>
+              <X size={20} />
+            </button>
+          )}
           {/* Vessel Image */}
           {selectedVessel.image_url && (
             <div className="vessel-img-wrap">

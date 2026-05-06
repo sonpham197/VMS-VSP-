@@ -4,6 +4,12 @@ import { supabase } from '@/lib/supabaseClient';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import WeatherPanel from './WeatherPanel';
+import VelocityLayer from './VelocityLayer';
+import TempHeatmapLayer from './TempHeatmapLayer';
+import TimelineSlider from './TimelineSlider';
+import DynamicLegend from './DynamicLegend';
+import DashboardMenu from './DashboardMenu';
+import TrackReplayLayer from './TrackReplayLayer';
 
 // Fix for default marker icons if needed, but we'll use custom divIcons
 // based on the vessel's status.
@@ -42,19 +48,34 @@ const createCustomIcon = (status, heading, fleetColor) => {
 
 function MapUpdater({ selectedVessel }) {
   const map = useMap();
+  const prevVesselId = React.useRef(null);
+
   useEffect(() => {
     if (selectedVessel && selectedVessel.lat && selectedVessel.lng) {
-      map.flyTo([selectedVessel.lat, selectedVessel.lng], 12, { animate: true });
+      if (prevVesselId.current !== selectedVessel.Vessel_id) {
+        map.flyTo([selectedVessel.lat, selectedVessel.lng], 12, { animate: true });
+        prevVesselId.current = selectedVessel.Vessel_id;
+      }
+    } else if (!selectedVessel) {
+      prevVesselId.current = null;
     }
   }, [selectedVessel, map]);
   return null;
 }
 
-export default function MapView({ vessels, tracks, predictedTracks = [], routeData = null, onSelectVessel, selectedVessel, onTrackRequest, onPredictionRequest, onRouteRequest, onZoneDrawn, onZoneDelete }) {
+export default function MapView({ vessels, tracks, predictedTracks = [], routeData = null, onSelectVessel, selectedVessel, onTrackRequest, onPredictionRequest, onRouteRequest, onZoneDrawn, onZoneDelete, onClearTracks, onClearPrediction }) {
   const [contextMenu, setContextMenu] = useState(null);
   const [mapContextMenu, setMapContextMenu] = useState(null);
   const [weatherVessel, setWeatherVessel] = useState(null);
-  const [showSeamark, setShowSeamark] = useState(false);
+  
+  // Weather Layers State
+  const [activeLayer, setActiveLayer] = useState(null); // 'wind', 'rain', 'marine', 'waves', 'temp'
+  const [windData, setWindData] = useState(null);
+  const [waterData, setWaterData] = useState(null);
+  const [rainData, setRainData] = useState({ past: [], nowcast: [] });
+  const [timeOffset, setTimeOffset] = useState(0);
+  const [showWarningZones, setShowWarningZones] = useState(true);
+
   const [zones, setZones] = useState([]);
   const [routeCriteria, setRouteCriteria] = useState({ time: true, fuel: false, risk: false, weather: false });
   
@@ -76,6 +97,46 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
     };
     fetchZones();
   }, []);
+
+  // Fetch weather layer data when active
+  useEffect(() => {
+    if (activeLayer === 'wind' && !windData) {
+      fetch('/wind-global.json')
+        .then(res => res.json())
+        .then(data => setWindData(data))
+        .catch(err => console.error("Error loading wind data:", err));
+    }
+    if (activeLayer === 'waves' && !waterData) {
+      fetch('/water-global.json')
+        .then(res => res.json())
+        .then(data => setWaterData(data))
+        .catch(err => console.error("Error loading water data:", err));
+    }
+    if (activeLayer === 'rain' && rainData.past.length === 0) {
+      fetch('https://api.rainviewer.com/public/weather-maps.json')
+        .then(res => res.json())
+        .then(data => {
+          if (data.radar) {
+            setRainData({
+              past: data.radar.past || [],
+              nowcast: data.radar.nowcast || []
+            });
+          }
+        })
+        .catch(err => console.error("Error loading rain data:", err));
+    }
+  }, [activeLayer, windData, rainData.past.length]);
+
+  const currentRainPath = useMemo(() => {
+    if (activeLayer !== 'rain') return null;
+    if (timeOffset <= 0) {
+      const idx = Math.max(0, rainData.past.length - 1 + Math.floor(timeOffset * 2));
+      return rainData.past[idx]?.path;
+    } else {
+      const idx = Math.max(0, Math.min(rainData.nowcast.length - 1, Math.floor(timeOffset * 2)));
+      return rainData.nowcast[idx]?.path || rainData.past[rainData.past.length - 1]?.path;
+    }
+  }, [timeOffset, rainData, activeLayer]);
 
   // Helper to parse WKT POLYGON((...)) to [[lat, lng], ...]
   const parseWKT = (wkt) => {
@@ -194,20 +255,41 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
       />
-      {showSeamark && (
+      
+      {/* Weather & Marine Layers */}
+      {activeLayer === 'marine' && (
         <TileLayer
           attribution='&copy; <a href="http://www.openseamap.org">OpenSeaMap</a> contributors'
           url="https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png"
+          zIndex={10}
         />
+      )}
+      {activeLayer === 'rain' && currentRainPath && (
+        <TileLayer
+          key={`rain-${currentRainPath}`}
+          attribution='&copy; <a href="https://www.rainviewer.com">RainViewer</a>'
+          url={`https://tilecache.rainviewer.com${currentRainPath}/256/{z}/{x}/{y}/2/1_1.png`}
+          opacity={0.6}
+          zIndex={10}
+        />
+      )}
+      {activeLayer === 'wind' && windData && (
+        <VelocityLayer data={windData} type="wind" />
+      )}
+      {activeLayer === 'waves' && waterData && (
+        <VelocityLayer data={waterData} type="water" />
+      )}
+      {activeLayer === 'temp' && (
+        <TempHeatmapLayer timeOffset={timeOffset} />
       )}
       
       <MapUpdater selectedVessel={selectedVessel} />
       <MapEventsHandler />
 
-      {/* Render Zones */}
-      {zones.map(zone => (
+      {/* Geofence Zones */}
+      {showWarningZones && zones.map((zone, idx) => (
         <Polygon
-          key={zone.id}
+          key={idx}
           positions={parseWKT(zone.geom_wkt)}
           pathOptions={{
             color: zone.severity === 'danger' ? '#ef4444' : '#f59e0b',
@@ -248,82 +330,30 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
         </React.Fragment>
       )}
 
-      {/* Render Polylines for historical tracks */}
+      {/* Render Polylines for historical tracks (Replay Mode) */}
       {Object.entries(tracksByVessel).map(([vesselId, vesselTracks]) => {
-        // Find current vessel to get status color, fallback to default
         const currentVessel = vessels.find(v => v.Vessel_id === vesselId);
         const color = currentVessel?.fleetColor || getStatusColor(currentVessel?.status);
         
-        const positions = vesselTracks
-          .filter(t => t.lat && t.lng)
-          .map(t => [t.lat, t.lng]);
-
-        if (positions.length < 2) return null;
-
         return (
-          <React.Fragment key={`track-group-${vesselId}`}>
-            <Polyline 
-              positions={positions} 
-              color={color} 
-              weight={3} 
-              opacity={0.8}
-            />
-            {vesselTracks.filter(t => t.lat && t.lng).map((t, idx) => (
-              <CircleMarker
-                key={`point-${vesselId}-${idx}`}
-                center={[t.lat, t.lng]}
-                radius={4}
-                color={color}
-                fillColor="#242424"
-                fillOpacity={1}
-                weight={2}
-              >
-                <Tooltip direction="top" opacity={1}>
-                  <div style={{ textAlign: 'center' }}>
-                    <strong>{new Date(t.created_at).toLocaleString()}</strong><br/>
-                    Lat: {t.lat?.toFixed(5)}, Lng: {t.lng?.toFixed(5)}<br/>
-                    Speed: {t.speed?.toFixed(1) || 0} kn<br/>
-                    Heading: {t.heading || 0}°
-                  </div>
-                </Tooltip>
-              </CircleMarker>
-            ))}
-          </React.Fragment>
+          <TrackReplayLayer 
+            key={`track-group-${vesselId}`}
+            tracks={vesselTracks}
+            color={color}
+            onClose={onClearTracks}
+          />
         );
       })}
 
       {/* Render Predicted Tracks (AI) */}
       {predictedTracks && predictedTracks.length > 0 && (
-        <React.Fragment>
-          <Polyline 
-            positions={predictedTracks.map(p => [p.lat, p.lng])} 
-            color="#22d3ee" 
-            weight={3} 
-            opacity={0.8}
-            dashArray="10, 10"
-          />
-          {predictedTracks.filter(p => !p.is_anchor).map((p, idx) => (
-            <CircleMarker
-              key={`pred-${idx}`}
-              center={[p.lat, p.lng]}
-              radius={5}
-              color="#22d3ee"
-              fillColor="#0f172a"
-              fillOpacity={1}
-              weight={2}
-            >
-              <Tooltip direction="top" opacity={1}>
-                <div style={{ textAlign: 'center', minWidth: '150px' }}>
-                  <div style={{color: '#f87171', fontWeight: 'bold', marginBottom:'4px'}}>⚠️ CẢNH BÁO: Điểm dự báo AI</div>
-                  <strong style={{color: p.is_ai_predicted ? '#22d3ee' : '#cbd5e1'}}>{new Date(p.time).toLocaleString()}</strong><br/>
-                  Lat: {p.lat?.toFixed(5)}, Lng: {p.lng?.toFixed(5)}<br/>
-                  Speed: {p.speed?.toFixed(1) || 0} kn<br/>
-                  Gió môi trường: {p.weather_wind_speed || 0} km/h<br/>
-                </div>
-              </Tooltip>
-            </CircleMarker>
-          ))}
-        </React.Fragment>
+        <TrackReplayLayer
+          tracks={predictedTracks}
+          color="#22d3ee"
+          title="▶ MÔ PHỎNG DỰ BÁO AI"
+          timeKey="time"
+          onClose={onClearPrediction}
+        />
       )}
 
       {/* Render Target Route Data */}
@@ -418,6 +448,64 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
         .leaflet-container {
           background-color: #242424; /* Prevents white flash before tiles load */
         }
+        
+        /* Layer Menu Styles */
+        .weather-layer-menu {
+          position: absolute;
+          top: 80px;
+          right: 10px;
+          z-index: 1000;
+          background: rgba(15, 23, 42, 0.7);
+          backdrop-filter: blur(12px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
+          padding: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+          width: 140px;
+          animation: slideInRight 0.3s ease;
+        }
+        @keyframes slideInRight {
+          from { opacity: 0; transform: translateX(20px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        .layer-menu-title {
+          font-size: 0.7rem;
+          color: #94a3b8;
+          text-transform: uppercase;
+          font-weight: 700;
+          margin-bottom: 4px;
+          padding-left: 4px;
+        }
+        .layer-btn {
+          background: rgba(255,255,255,0.05);
+          border: 1px solid transparent;
+          color: #cbd5e1;
+          padding: 8px 10px;
+          border-radius: 8px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 0.85rem;
+          transition: all 0.2s;
+          text-align: left;
+        }
+        .layer-btn:hover {
+          background: rgba(255,255,255,0.1);
+        }
+        .layer-btn.active {
+          background: rgba(56,189,248,0.15);
+          border-color: rgba(56,189,248,0.4);
+          color: #38bdf8;
+          box-shadow: 0 0 15px rgba(56,189,248,0.2);
+        }
+        .layer-icon {
+          font-size: 1.1rem;
+        }
+
         .map-overlay-controls {
           position: absolute;
           top: 10px;
@@ -555,27 +643,56 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
           width: 100%; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; border-radius: 6px; padding: 6px 10px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;
         }
         .draw-btn-cancel:hover { background: rgba(239,68,68,0.25); }
+        .drawing-action-panel {
+          position: absolute;
+          top: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: rgba(15, 23, 42, 0.9);
+          backdrop-filter: blur(8px);
+          padding: 12px 24px;
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          z-index: 1000;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 12px;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+          animation: slideDown 0.3s ease;
+        }
+        @keyframes slideDown {
+          from { opacity: 0; transform: translate(-50%, -20px); }
+          to { opacity: 1; transform: translate(-50%, 0); }
+        }
       `}</style>
     </MapContainer>
 
-      {/* Map Controls */}
-      <div className="map-overlay-controls">
-        <label className="control-label">
-          <input type="checkbox" checked={showSeamark} onChange={(e) => setShowSeamark(e.target.checked)} />
-          <span>🌊 Lớp Hàng hải & Thời tiết</span>
-        </label>
-        <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-          {!isDrawing ? (
-            <button className="draw-btn" onClick={() => setIsDrawing(true)}>✏️ Vẽ Vùng Cảnh báo</button>
-          ) : (
-            <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
-              <span style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>Click trên bản đồ để tạo điểm.</span>
-              <button className="draw-btn-save" onClick={handleFinishDrawing}>✅ Hoàn tất ({drawnPoints.length} điểm)</button>
-              <button className="draw-btn-cancel" onClick={handleCancelDrawing}>❌ Huỷ</button>
-            </div>
-          )}
+      <DashboardMenu 
+        activeLayer={activeLayer} 
+        setActiveLayer={setActiveLayer}
+        isDrawing={isDrawing}
+        setIsDrawing={setIsDrawing}
+        showWarningZones={showWarningZones}
+        setShowWarningZones={setShowWarningZones}
+      />
+
+      <DynamicLegend activeLayer={activeLayer} />
+
+      {/* Timeline Slider for Weather */}
+      {(activeLayer === 'wind' || activeLayer === 'rain' || activeLayer === 'waves' || activeLayer === 'temp') && (
+        <TimelineSlider value={timeOffset} onChange={setTimeOffset} />
+      )}
+
+      {isDrawing && (
+        <div className="drawing-action-panel">
+          <span style={{ fontSize: '0.85rem', color: '#cbd5e1', fontWeight: 600 }}>Click trên bản đồ để tạo điểm.</span>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button className="draw-btn-save" onClick={handleFinishDrawing}>✅ Hoàn tất ({drawnPoints.length} điểm)</button>
+            <button className="draw-btn-cancel" onClick={handleCancelDrawing}>❌ Huỷ</button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Floating Context Menu moved outside MapContainer */}
       {contextMenu && (
