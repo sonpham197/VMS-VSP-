@@ -4,10 +4,13 @@ import Head from 'next/head';
 import Sidebar from '@/components/Sidebar';
 import TopBar from '@/components/TopBar';
 import AlertDrawer from '@/components/AlertDrawer';
+import CollisionAlert from '@/components/CollisionAlert';
+import CollisionHistoryPanel from '@/components/CollisionHistoryPanel';
 import { supabase } from '@/lib/supabaseClient';
 import { Bell, Layers } from 'lucide-react';
 import FleetManager from '@/components/FleetManager';
 import ZoneModal from '@/components/ZoneModal';
+import { useCwaEngine } from '@/hooks/useCwaEngine';
 
 const MapView = dynamic(() => import('@/components/MapView'), {
   ssr: false,
@@ -59,6 +62,8 @@ export default function Home() {
   const [selectedFleetId, setSelectedFleetId] = useState('all');
   const [showFleetManager, setShowFleetManager] = useState(false);
   const [drawnZonePoints, setDrawnZonePoints] = useState(null);
+  const [showCollisionLayer, setShowCollisionLayer] = useState(true);  // CPA map layer
+  const [showCpaHistory, setShowCpaHistory] = useState(false);          // CPA history panel
 
   useEffect(() => {
     const saved = localStorage.getItem('vms_fleets');
@@ -127,9 +132,20 @@ export default function Home() {
     }));
   }, [vessels, selectedFleetId, fleets]);
 
-  const selectedVessel = useMemo(() => 
+  const selectedVessel = useMemo(() =>
     filteredVessels.find(v => v.Vessel_id === selectedVesselId),
   [filteredVessels, selectedVesselId]);
+
+  // ── Collision Warning Engine ──────────────────────────────────────────
+  // Khai báo sau filteredVessels để đúng thứ tự React hook
+  const {
+    activeRisks,
+    acknowledgeRisk,
+    acknowledgeAll,
+    isMuted,
+    toggleMute,
+    totalActiveCount: collisionCount,
+  } = useCwaEngine(filteredVessels);
 
   // ── Initial Data Fetch ────────────────────────────────────────────────────
   useEffect(() => {
@@ -363,6 +379,11 @@ export default function Home() {
     setIsAlertDrawerOpen(false);
   };
 
+  const handleLocateCollision = (risk) => {
+    // Zoom bản đồ về tàu A trong cặp va chạm
+    setSelectedVesselId(risk.vesselA.Vessel_id);
+  };
+
   const handleZoneDelete = async (zoneId) => {
     if (!confirm('Bạn có chắc muốn xoá vùng cảnh báo này?')) return;
     try {
@@ -402,6 +423,10 @@ export default function Home() {
             tracks={activeTrackData}
             predictedTracks={predictedTracks}
             routeData={routeData}
+            activeRisks={activeRisks}
+            showCollisionLayer={showCollisionLayer}
+            setShowCollisionLayer={setShowCollisionLayer}
+            sidebarOpen={!!selectedVesselId}
             onSelectVessel={(v) => setSelectedVesselId(v.Vessel_id)}
             selectedVessel={selectedVessel}
             onTrackRequest={handleTrackRequest}
@@ -411,6 +436,7 @@ export default function Home() {
             onRouteRequest={handleRouteRequest}
             onZoneDrawn={setDrawnZonePoints}
             onZoneDelete={handleZoneDelete}
+            onOpenCpaHistory={() => setShowCpaHistory(true)}
           />
         </div>
         <div className={`sidebar-container ${selectedVesselId ? 'open' : ''}`}>
@@ -422,6 +448,23 @@ export default function Home() {
         isOpen={isAlertDrawerOpen}
         onClose={() => setIsAlertDrawerOpen(false)}
         onLocate={handleLocateAlert}
+      />
+
+      {/* Collision Warning Toast Stack - góc trên TRÁI để không che DashboardMenu */}
+      <CollisionAlert
+        activeRisks={activeRisks}
+        acknowledgeRisk={acknowledgeRisk}
+        acknowledgeAll={acknowledgeAll}
+        isMuted={isMuted}
+        toggleMute={toggleMute}
+        onLocate={handleLocateCollision}
+      />
+
+      {/* CPA History Panel */}
+      <CollisionHistoryPanel
+        isOpen={showCpaHistory}
+        onClose={() => setShowCpaHistory(false)}
+        onLocate={(vesselId) => setSelectedVesselId(vesselId)}
       />
 
       {showFleetManager && (
@@ -444,8 +487,12 @@ export default function Home() {
       <button
         className="alert-trigger-btn"
         onClick={() => setIsAlertDrawerOpen(true)}
+        title="Cảnh báo hệ thống"
       >
         <Bell size={20} />
+        {collisionCount > 0 && (
+          <span className="collision-badge">{collisionCount}</span>
+        )}
       </button>
 
       <style jsx>{`
@@ -485,8 +532,30 @@ export default function Home() {
           cursor: pointer;
           z-index: 99;
           transition: transform 0.2s, background 0.2s;
+          position: fixed;
         }
         .alert-trigger-btn:hover { transform: scale(1.1); background: #f87171; }
+        .collision-badge {
+          position: absolute;
+          top: -4px;
+          right: -4px;
+          background: #f59e0b;
+          color: #0f172a;
+          font-size: 0.65rem;
+          font-weight: 800;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 2px solid #0f172a;
+          animation: badgePulse 1.5s ease-in-out infinite;
+        }
+        @keyframes badgePulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.5); }
+          50% { box-shadow: 0 0 0 5px rgba(245,158,11,0); }
+        }
         @keyframes spin { 0%{transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
       `}</style>
     </>

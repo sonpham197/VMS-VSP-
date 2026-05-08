@@ -10,6 +10,7 @@ import TimelineSlider from './TimelineSlider';
 import DynamicLegend from './DynamicLegend';
 import DashboardMenu from './DashboardMenu';
 import TrackReplayLayer from './TrackReplayLayer';
+import CollisionOverlay from './CollisionOverlay';
 
 // Fix for default marker icons if needed, but we'll use custom divIcons
 // based on the vessel's status.
@@ -63,7 +64,7 @@ function MapUpdater({ selectedVessel }) {
   return null;
 }
 
-export default function MapView({ vessels, tracks, predictedTracks = [], routeData = null, onSelectVessel, selectedVessel, onTrackRequest, onPredictionRequest, onRouteRequest, onZoneDrawn, onZoneDelete, onClearTracks, onClearPrediction }) {
+export default function MapView({ vessels, tracks, predictedTracks = [], routeData = null, activeRisks = [], showCollisionLayer = true, setShowCollisionLayer, sidebarOpen = false, onSelectVessel, selectedVessel, onTrackRequest, onPredictionRequest, onRouteRequest, onZoneDrawn, onZoneDelete, onClearTracks, onClearPrediction, onOpenCpaHistory }) {
   const [contextMenu, setContextMenu] = useState(null);
   const [mapContextMenu, setMapContextMenu] = useState(null);
   const [weatherVessel, setWeatherVessel] = useState(null);
@@ -285,6 +286,9 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
       
       <MapUpdater selectedVessel={selectedVessel} />
       <MapEventsHandler />
+
+      {/* Collision Warning Overlay - bật/tắt bởi showCollisionLayer */}
+      {showCollisionLayer && <CollisionOverlay activeRisks={activeRisks} />}
 
       {/* Geofence Zones */}
       {showWarningZones && zones.map((zone, idx) => (
@@ -675,6 +679,10 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
         setIsDrawing={setIsDrawing}
         showWarningZones={showWarningZones}
         setShowWarningZones={setShowWarningZones}
+        showCollisionLayer={showCollisionLayer}
+        setShowCollisionLayer={setShowCollisionLayer}
+        onOpenCpaHistory={onOpenCpaHistory}
+        sidebarOpen={sidebarOpen}
       />
 
       <DynamicLegend activeLayer={activeLayer} />

@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { Bell, ShieldAlert, AlertTriangle, Info, CheckCircle, X, MapPin, ExternalLink } from 'lucide-react';
+import { Bell, ShieldAlert, AlertTriangle, Info, CheckCircle, X, MapPin, Anchor, Navigation } from 'lucide-react';
 
 export default function AlertDrawer({ isOpen, onClose, onLocate }) {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('zone'); // 'zone' | 'collision'
 
   const fetchAlerts = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('alerts')
-      .select('*, vessels(Vessel_name)')
+      .select('*, vessels!alerts_vessel_id_fkey(Vessel_name)')
       .in('status', ['open', 'acknowledged'])   // chỉ lấy alerts còn hoạt động
       .order('created_at', { ascending: false })
       .limit(50);
@@ -76,6 +77,10 @@ export default function AlertDrawer({ isOpen, onClose, onLocate }) {
 
   if (!isOpen) return null;
 
+  const zoneAlerts       = alerts.filter(a => !a.alert_type || a.alert_type === 'zone_violation' || a.alert_type === 'speed_limit');
+  const collisionAlerts  = alerts.filter(a => a.alert_type === 'collision_risk');
+  const displayedAlerts  = activeTab === 'collision' ? collisionAlerts : zoneAlerts;
+
   return (
     <div className="alert-drawer-overlay">
       <div className="alert-drawer">
@@ -88,13 +93,35 @@ export default function AlertDrawer({ isOpen, onClose, onLocate }) {
           <button className="close-btn" onClick={onClose}><X size={24} /></button>
         </div>
 
+        {/* Tab switcher */}
+        <div className="tab-bar">
+          <button
+            className={`tab-btn ${activeTab === 'zone' ? 'active' : ''}`}
+            onClick={() => setActiveTab('zone')}
+          >
+            <Anchor size={14} />
+            Vùng cảnh báo
+            {zoneAlerts.length > 0 && <span className="tab-count">{zoneAlerts.length}</span>}
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'collision' ? 'active-collision' : ''}`}
+            onClick={() => setActiveTab('collision')}
+          >
+            <Navigation size={14} />
+            Va chạm
+            {collisionAlerts.length > 0 && (
+              <span className="tab-count tab-count-danger">{collisionAlerts.length}</span>
+            )}
+          </button>
+        </div>
+
         <div className="drawer-content">
           {loading ? (
             <div className="empty-state">Đang tải cảnh báo...</div>
-          ) : alerts.length === 0 ? (
+          ) : displayedAlerts.length === 0 ? (
             <div className="empty-state">Không có cảnh báo nào</div>
           ) : (
-            alerts.map(alert => (
+            displayedAlerts.map(alert => (
               <div 
                 key={alert.id} 
                 className={`alert-card ${alert.status}`}
@@ -159,11 +186,55 @@ export default function AlertDrawer({ isOpen, onClose, onLocate }) {
           to { transform: translateX(0); }
         }
         .drawer-header {
-          padding: 24px;
+          padding: 20px 24px 12px;
           border-bottom: 1px solid rgba(255,255,255,0.08);
           display: flex;
           align-items: center;
           justify-content: space-between;
+        }
+        .tab-bar {
+          display: flex;
+          border-bottom: 1px solid rgba(255,255,255,0.08);
+          padding: 0 12px;
+          gap: 4px;
+        }
+        .tab-btn {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 10px 8px;
+          background: none;
+          border: none;
+          border-bottom: 2px solid transparent;
+          color: #64748b;
+          font-size: 0.78rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+          margin-bottom: -1px;
+        }
+        .tab-btn:hover { color: #94a3b8; }
+        .tab-btn.active {
+          color: #38bdf8;
+          border-bottom-color: #38bdf8;
+        }
+        .tab-btn.active-collision {
+          color: #ef4444;
+          border-bottom-color: #ef4444;
+        }
+        .tab-count {
+          background: rgba(255,255,255,0.1);
+          color: #94a3b8;
+          font-size: 0.65rem;
+          padding: 1px 6px;
+          border-radius: 999px;
+          font-weight: 700;
+        }
+        .tab-count-danger {
+          background: rgba(239,68,68,0.2);
+          color: #fca5a5;
         }
         .header-title { display: flex; align-items: center; gap: 12px; }
         .header-title h2 { font-size: 1.25rem; font-weight: 600; color: #f8fafc; margin: 0; }

@@ -1,16 +1,25 @@
 # TÀI LIỆU THIẾT KẾ TỔNG THỂ HỆ THỐNG - VESSEL MONITORING SYSTEM (VMS)
 
+> **Phiên bản:** 2.1 | **Cập nhật:** 2026-05-08
+>
+> **Changelog:**
+> - **v2.1** (2026-05-08) — Tích hợp Collision Warning System (CWS): CPA/TCPA engine, CollisionAlert UI, CollisionOverlay, CollisionHistoryPanel, DashboardMenu CPA layer control, layout phân vùng UI
+> - **v2.0** (2026-05-07) — Track Replay, Fleet Grouping, Geofencing, Weather Layers, AlertDrawer
+> - **v1.0** (2026-05-01) — Core: Real-time tracking, AI prediction, route optimization
+
 ## 1. Tổng quan hệ thống
-Hệ thống Giám sát Tàu thuyền (Vessel Monitoring System - VMS) là một ứng dụng Web thời gian thực được thiết kế để theo dõi vị trí, trạng thái và lịch sử hành trình của đội tàu. Hệ thống tích hợp Trí tuệ nhân tạo (AI) để dự báo quỹ đạo và các thuật toán hình học để tối ưu hóa hải trình dựa trên nhiều tiêu chí (ETA, Nhiên liệu, Thời tiết, Rủi ro).
+Hệ thống Giám sát Tàu thuyền (Vessel Monitoring System - VMS) là một ứng dụng Web thời gian thực được thiết kế để theo dõi vị trí, trạng thái và lịch sử hành trình của đội tàu. Hệ thống tích hợp Trí tuệ nhân tạo (AI) để dự báo quỹ đạo và các thuật toán hình học để tối ưu hóa hải trình dựa trên nhiều tiêu chí (ETA, Nhiên liệu, Thời tiết, Rủi ro). Phiên bản mới nhất bổ sung **Hệ thống Cảnh báo Va chạm (CWS)** theo tiêu chuẩn COLREGS.
 
 ### Các tính năng chính:
-- **Theo dõi thời gian thực (Real-time Tracking)**: Hiển thị vị trí tàu tức thời trên bản đồ tương tác.
-- **Phân tích lịch sử**: Truy xuất và hiển thị quỹ đạo di chuyển của tàu trong quá khứ (1h, 12h, 24h...).
-- **Quản lý Đội tàu (Fleet Grouping)**: Tạo và quản lý các nhóm tàu tùy chỉnh, bộ lọc động và gán màu sắc định danh trên bản đồ.
-- **Vùng cảnh báo cá nhân (Custom Geofencing)**: Vẽ và quản lý đa giác khép kín để thiết lập cảnh báo vào/ra khu vực (cảng, vùng cấm).
-- **Lớp phủ Thời tiết (Weather Overlays)**: Hiển thị lớp bản đồ hàng hải và khí tượng (OpenSeaMap) phục vụ điều hướng an toàn.
+- **Theo dõi thời gian thực (Real-time Tracking)**: Hiển thị vị trí tàu tức thời trên bản đồ tương tác với cập nhật dữ liệu liên tục qua WebSockets.
+- **Phân tích và Mô phỏng Lịch sử (Track Replay)**: Truy xuất và hiển thị quỹ đạo di chuyển của tàu trong quá khứ thông qua `TrackReplayLayer`. Cho phép phát lại (Play/Pause), điều chỉnh tốc độ, tua (scrub) và tự động thay đổi khung hình (map bounds) tập trung vào quỹ đạo.
+- **Quản lý Đội tàu (Fleet Grouping)**: Tạo và quản lý các nhóm tàu tùy chỉnh, bộ lọc động và gán màu sắc định danh trên bản đồ. Hỗ trợ đa người dùng (Multi-tenant).
+- **Vùng cảnh báo cá nhân & Geofencing**: Vẽ và quản lý đa giác khép kín để thiết lập cảnh báo vào/ra khu vực (cảng, vùng cấm). Hỗ trợ cả Engine cơ sở dữ liệu (PostGIS) và Fallback cảnh báo trên Client (Point-in-Polygon Ray-casting).
+- **Lớp phủ Khí tượng & Hải dương (Weather & Velocity Layers)**: Hiển thị lớp bản đồ hàng hải và khí tượng (dòng chảy, sức gió, v.v.) với thiết kế Glassmorphism trực quan, hỗ trợ điều hướng an toàn.
 - **Dự báo quỹ đạo AI**: Sử dụng mạng thần kinh LSTM để dự đoán hướng đi của tàu trong tương lai (4h - 24h).
-- **Tối ưu lộ trình (ETA Optimization)**: Tính toán đường đi ngắn nhất tránh vật cả đất liền và đề xuất lộ trình tối ưu dựa trên hàm chi phí linh hoạt.
+- **Tối ưu lộ trình (ETA Optimization)**: Tính toán đường đi ngắn nhất tránh đất liền và đề xuất lộ trình tối ưu dựa trên hàm chi phí linh hoạt.
+- **Cảnh báo Va chạm (CWS — v2.1 mới)**: Tính toán CPA/TCPA theo thời gian thực cho tất cả cặp tàu, phân loại mức nguy hiểm (Danger/Warning/Info), hiển thị toast UI, overlay bản đồ, âm thanh cảnh báo, lưu trữ lịch sử và bộ điều khiển layer trong DashboardMenu.
+
 
 ---
 
@@ -21,7 +30,7 @@ Hệ thống được xây dựng trên mô hình hiện đại dựa trên đá
 graph TD
     User((Người dùng)) -->|React/Next.js| Frontend[Frontend - Web Dashboard]
     Frontend -->|API Requests| Backend[Backend - Next.js API Routes]
-    Backend -->|Queries| DB[(Supabase PostgreSQL)]
+    Backend -->|Queries| DB[(Supabase PostgreSQL + PostGIS)]
     Backend -->|Fetch| WeatherAPI[Open-Meteo Weather API]
     Backend -->|Compute| AI[Synaptic.js AI Engine]
     Backend -->|GIS Compute| GIS[Turf.js GIS Engine]
@@ -29,94 +38,73 @@ graph TD
 ```
 
 ### Các thành phần chính:
-1. **Frontend**: Next.js, React, Leaflet (Quản lý bản đồ), CSS thuần (Styling).
-2. **Backend**: Next.js API Routes (Serverless), xử lý logic nghiệp vụ và tính toán.
-3. **Database**: Supabase cung cấp giải pháp lưu trữ dữ liệu và Real-time Subscriptions qua PostgreSQL.
+1. **Frontend**: Next.js, React, Leaflet (Quản lý bản đồ), UI/UX với Glassmorphism, TailwindCSS / Vanilla CSS. Cung cấp các panel kiểm soát như `WeatherPanel`, `TrackReplayLayer`.
+2. **Backend**: Next.js API Routes (Serverless), xử lý logic nghiệp vụ và tính toán đồng bộ.
+3. **Database**: Supabase cung cấp giải pháp lưu trữ dữ liệu (PostgreSQL) và Real-time Subscriptions. Tích hợp PostGIS cho phân tích không gian.
 4. **GIS & AI**:
-   - `Turf.js`: Xử lý các phép toán hình học không gian (khoảng cách, cắt lớp đất liền, bẻ cong lộ trình).
+   - `Turf.js` & `Client Ray-casting`: Xử lý các phép toán hình học không gian (khoảng cách, cắt lớp đất liền, kiểm tra Point-in-Polygon).
    - `Synaptic.js`: Thư viện mạng thần kinh thuần JavaScript dùng cho mô hình LSTM dự báo quỹ đạo.
 
 ---
 
 ## 3. Thiết kế Cơ sở dữ liệu (Supabase)
+*Chi tiết bảng, ràng buộc và cấu trúc xem thêm tại `DATABASE_DESIGN.md`.*
 
-### 3.1 Bảng `vessels` (Thông tin tĩnh)
-Lưu trữ thông tin định danh và thông số kỹ thuật của tàu.
-- `Vessel_id`: Mã định danh duy nhất (Primary Key).
-- `Vessel_name`: Tên tàu.
-- `IMO`, `MMSI`: Các mã định danh hàng hải quốc tế.
-- `vessel_type`: Loại tàu (Container, Tanker, Fishing...).
-- `flag`: Quốc tịch.
-- `length_m`, `width_m`: Kích thước.
-- `image_url`: Ảnh đại diện của tàu.
+### 3.1 Thực thể Chính (Core Entities)
+- **vessels**: Thông tin định danh và thông số kỹ thuật của tàu.
+- **vessel_tracks**: Các điểm dữ liệu lịch sử và vị trí hiện tại (append-only), lưu trữ `status` để phản ánh an toàn.
 
-### 3.2 Bảng `vessel_tracks` (Dữ liệu hành trình)
-Lưu trữ các điểm dữ liệu lịch sử và vị trí hiện tại.
-- `id`: Định danh bản ghi.
-- `Vessel_id`: Đối chiếu với bảng vessels.
-- `lat`, `lng`: Tọa độ địa lý.
-- `speed`: Vận tốc (Knots).
-- `heading`: Hướng tàu (0-360 độ).
-- `status`: Trạng thái (Normal, Warning, Danger).
-- `created_at`: Thời điểm ghi nhận dữ liệu (Timestamp).
+### 3.2 Hệ thống Cảnh báo Không gian (Spatial Alerts)
+- **zones**: Quản lý các vùng cảnh báo, vùng cấm. Sử dụng `geometry(Polygon, 4326)` từ PostGIS.
+- **anomaly_rules**: Các cấu hình vi phạm, ví dụ `ZONE_VIOLATION`, `SPEED_LIMIT`.
+- **alerts**: Quản lý các cảnh báo được sinh ra thông qua triggers tự động khi có track mới.
 
-### 3.3 Bảng `zones` và Cảnh báo (Alerts)
-- **zones**: Quản lý các vùng cảnh báo, vùng cấm, cảng biển. Tích hợp `PostGIS` với cột `geom` kiểu `geometry(Polygon, 4326)` để phân tích không gian. Dữ liệu được hỗ trợ hiển thị và vẽ tương tác ngay trên Frontend.
-- **alerts**: Quản lý các cảnh báo được sinh ra (vi phạm tốc độ, đi vào vùng cấm) thông qua các trigger SQL tự động.
-
-### 3.4 Quản lý Khách hàng và Đội tàu
-- Các bảng mở rộng như `Customer`, `customer_fleets` và `fleet_vessels` (chứa quan hệ giữa khách hàng và tàu) cho phép thiết lập chế độ đa người dùng (Multi-tenant). Tuy nhiên, hiện tại Front-end cũng hỗ trợ lưu trữ trạng thái Fleet thông qua `LocalStorage` để linh hoạt thử nghiệm.
+### 3.3 Quản lý Khách hàng và Đội tàu (Fleets)
+- **Customer**: Bảng người dùng hệ thống.
+- **customer_fleets**: Nhóm tàu do khách hàng định nghĩa (ID, màu sắc, tên).
+- **fleet_vessels**: Bảng trung gian liên kết giữa đội tàu và tàu, hỗ trợ n-n relationships.
 
 ---
 
-## 4. Thuật toán cốt lõi
+## 4. Thuật toán và Logic Cốt lõi
 
-### 4.1 Dự báo quỹ đạo AI (LSTM)
-- **Mô hình**: Mạng Long Short-Term Memory (LSTM) được huấn luyện trực tiếp trên 50 điểm hành trình gần nhất của tàu.
-- **Input**: Chuỗi Delta vận tốc và Delta hướng đi từ quá khứ.
-- **Output**: Vị trí dự báo (Lat, Lng) cho từng giờ tiếp theo.
-- **Cơ chế phòng vệ**: Tích hợp kiểm tra `turf.booleanPointInPolygon` để dừng dự báo nếu quỹ đạo AI dự đoán đâm vào đất liền.
+### 4.1 Cơ chế Cảnh báo Vùng (Geofence Engine)
+- **Backend (PostGIS)**: Sử dụng trigger `on_vessel_track_insert` để gọi function `process_vessel_track_alerts`. Kiểm tra `ST_Contains` giữa track mới và các zones. Tự động sinh `alerts` và cập nhật `status`.
+- **Frontend Fallback**: Sử dụng thuật toán Point-in-Polygon (Ray-casting) để xác định tàu nằm trong hay ngoài vùng ngay trên trình duyệt, đảm bảo Dashboard hiển thị cảnh báo ngay cả khi backend bị chậm.
 
-### 4.2 Tối ưu hóa hải trình (ETA Optimization)
-Sử dụng hàm chi phí đa mục tiêu để tìm ra phương án di chuyển tốt nhất:
+### 4.2 Dự báo quỹ đạo AI (LSTM)
+- **Mô hình**: Mạng Long Short-Term Memory (LSTM) huấn luyện trực tiếp trên chuỗi điểm hành trình.
+- **Cơ chế phòng vệ**: Tích hợp kiểm tra để dừng dự báo nếu quỹ đạo AI dự đoán đâm vào đất liền (`turf.booleanPointInPolygon`).
+
+### 4.3 Tối ưu hóa hải trình (ETA Optimization)
+Sử dụng hàm chi phí đa mục tiêu để tìm phương án di chuyển tốt nhất:
 $$Cost = a \cdot Time + b \cdot Fuel + c \cdot Risk + d \cdot Weather$$
-
-*Xem chi tiết phân tích toán học và logic tại: [ETA_ALGORITHM_DEEP_DIVE.md](file:///c:/Users/Lenovo/Desktop/VMS/ETA_ALGORITHM_DEEP_DIVE.md)*
-
-- **Time**: Ưu tiên tốc độ tối đa.
-- **Fuel**: Ưu tiên tốc độ kinh tế (Economic Speed) để giảm tiêu hao nhiên liệu.
-- **Risk & Weather**: Tự động lệch tâm lộ trình (Perturbation) để né tránh vùng bão hoặc vùng nguy hiểm dựa trên dữ liệu thời thực từ Open-Meteo.
+- **Risk & Weather**: Tự động lệch tâm lộ trình (Perturbation) để né tránh vùng bão dựa trên dữ liệu từ Open-Meteo và hệ thống hiển thị thời tiết (`VelocityLayer`).
 
 ---
 
-## 5. Hướng dẫn cài đặt và Triển khai
+## 5. Hướng dẫn Cài đặt và Triển khai
 
-### 5.1 Cài đặt môi trường phát triển (Local)
+### 5.1 Cài đặt môi trường phát triển
 1. **Yêu cầu**: Node.js v18+.
-2. **Cài đặt dependencies**:
-   ```bash
-   npm install
-   ```
-3. **Cấu hình biến môi trường**: Tạo tệp `.env.local` tại thư mục gốc:
+2. **Cài đặt dependencies**: `npm install`
+3. **Cấu hình môi trường (`.env.local`)**:
    ```env
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
    ```
-4. **Chạy ứng dụng**:
-   ```bash
-   npm run dev
-   ```
+4. **Chạy ứng dụng**: `npm run dev`
 
 ### 5.2 Triển khai (Deployment)
-1. **Source Control**: Đẩy mã nguồn lên một Repository GitHub.
-2. **Hosting**: Kết nối Repo GitHub với **Vercel**.
-3. **Lưu ý Vercel**:
-   - Cấu hình Environment Variables tương tự như `.env.local`.
-   - File bản đồ địa lý được đặt trong `lib/data/` để đảm bảo được đóng gói (bundle) cùng Serverless Functions.
+1. **Hosting**: Khuyến nghị sử dụng **Vercel** do sự tương thích tốt với Next.js Serverless.
+2. **Dữ liệu tĩnh**: Đảm bảo các file bản đồ/geojson đặt trong `public/` hoặc `lib/data/` để bundle chính xác.
+3. **Supabase**: Cần chạy đầy đủ các script SQL trong repository (đặc biệt các script setup PostGIS và Triggers) trên môi trường Supabase Production.
 
 ---
 
 ## 6. Bảo mật và Hiệu năng
-- **Bảo mật**: Sử dụng Supabase RLS (Row Level Security) để bảo vệ dữ liệu. Các API Keys nhạy cảm được ẩn trong biến môi trường phía Server.
-- **Hiệu năng**: UI Render phía Client với `react-leaflet`. Các tính năng tính toán nặng (AI/ETA) được tách ra các API Route riêng biệt để không gây tắc nghẽn giao diện người dùng.
-- **GIS Optimization**: Dữ liệu đường bờ biển được đơn giản hóa để giảm tải cho tính toán không gian.
+- **Bảo mật**: Sử dụng Row Level Security (RLS) của Supabase để cách ly dữ liệu giữa các Customer. Keys nhạy cảm được quản lý qua server.
+- **Hiệu năng**: 
+  - Tối ưu hóa hiển thị Bản đồ với `React-Leaflet`, tránh re-render bằng cách memoize các markers và layers.
+  - Tách bạch logic tính toán nặng vào Web Workers hoặc Backend API.
+  - Sử dụng GiST index trong PostGIS để tăng tốc độ truy vấn `ST_Contains`.

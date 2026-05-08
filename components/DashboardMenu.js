@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Layers, PenTool, ChevronDown, Wind, CloudRain, Anchor, Waves, Thermometer, ShieldAlert } from 'lucide-react';
+import { Layers, PenTool, ChevronDown, Wind, CloudRain, Anchor, Waves, Thermometer, ShieldAlert, Activity, History } from 'lucide-react';
 
-export default function DashboardMenu({ activeLayer, setActiveLayer, isDrawing, setIsDrawing, showWarningZones, setShowWarningZones }) {
+export default function DashboardMenu({ activeLayer, setActiveLayer, isDrawing, setIsDrawing, showWarningZones, setShowWarningZones, showCollisionLayer, setShowCollisionLayer, onOpenCpaHistory, sidebarOpen = false }) {
   const [isOpen, setIsOpen] = useState(false);
 
   const toggleLayer = (layer) => {
@@ -9,7 +9,7 @@ export default function DashboardMenu({ activeLayer, setActiveLayer, isDrawing, 
   };
 
   return (
-    <div className="dashboard-menu">
+    <div className="dashboard-menu" style={{ right: sidebarOpen ? '376px' : '15px' }}>
       <button className="menu-trigger" onClick={() => setIsOpen(!isOpen)}>
         <Layers size={18} />
         <span>Công cụ & Lớp Bản đồ</span>
@@ -18,6 +18,21 @@ export default function DashboardMenu({ activeLayer, setActiveLayer, isDrawing, 
 
       {isOpen && (
         <div className="menu-dropdown">
+          <div className="menu-section">
+            <div className="section-title">CẢNh BÁO VA CHẠM (CPA)</div>
+            <button
+              className={`tool-btn ${showCollisionLayer ? 'active-cpa' : ''}`}
+              onClick={() => setShowCollisionLayer && setShowCollisionLayer(!showCollisionLayer)}
+            >
+              <Activity size={16} />
+              <span>{showCollisionLayer ? 'Đang hiện lớp CPA' : 'Hiện lớp CPA'}</span>
+            </button>
+            <button className="tool-btn history-btn" onClick={onOpenCpaHistory}>
+              <History size={16} />
+              <span>Lịch sử CPA</span>
+            </button>
+          </div>
+
           <div className="menu-section">
             <div className="section-title">VÙNG CẢNH BÁO</div>
             <button className={`tool-btn ${showWarningZones ? 'active' : ''}`} onClick={() => setShowWarningZones(!showWarningZones)}>
@@ -58,6 +73,7 @@ export default function DashboardMenu({ activeLayer, setActiveLayer, isDrawing, 
           top: 15px;
           right: 15px;
           z-index: 1000;
+          transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .menu-trigger {
           display: flex;
@@ -143,6 +159,20 @@ export default function DashboardMenu({ activeLayer, setActiveLayer, isDrawing, 
           background: rgba(56, 189, 248, 0.15);
           color: #38bdf8;
           border-color: rgba(56, 189, 248, 0.3);
+        }
+        .tool-btn.active-cpa {
+          background: rgba(56,189,248,0.15);
+          color: #38bdf8;
+          border-color: rgba(56,189,248,0.3);
+        }
+        .tool-btn.history-btn {
+          background: rgba(148,163,184,0.07);
+          border-color: rgba(148,163,184,0.2);
+          color: #94a3b8;
+        }
+        .tool-btn.history-btn:hover {
+          background: rgba(148,163,184,0.15);
+          color: #cbd5e1;
         }
       `}</style>
     </div>
