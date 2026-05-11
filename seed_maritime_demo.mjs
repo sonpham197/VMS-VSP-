@@ -26,7 +26,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ─── Geographic constants (Hai Phong area) ───────────────────────────────────
 const GEO = {
   lachHuyen:   { lat: 20.750, lng: 106.820 },
-  haiPhongPort:{ lat: 20.870, lng: 106.670 },
+  namTrieu:    { lat: 20.800, lng: 106.750 }, // river bend to avoid land
+  haiPhongPort:{ lat: 20.865, lng: 106.680 },
   catHaiAnch:  { lat: 20.790, lng: 106.920 },
   pilotStation:{ lat: 20.720, lng: 106.880 },
   gulfEntry:   { lat: 20.500, lng: 107.100 },
@@ -134,11 +135,11 @@ function interpolateRoute(waypoints, totalRecords, baseSpeed, startTime, options
       const t = segRecords > 1 ? i / (segRecords - 1) : 0;
       const pos = lerp(from, to, t);
 
-      // Add realistic position noise
-      const posNoise = navStatus === NAV.MOORED ? 0.0001 : 0.002;
+      // Add realistic position noise. Add large base offset per route to avoid collisions
+      const posNoise = navStatus === NAV.MOORED ? 0.0005 : 0.015;
       records.push({
-        lat:          +(pos.lat + (Math.random()-0.5) * posNoise).toFixed(6),
-        lng:          +(pos.lng + (Math.random()-0.5) * posNoise).toFixed(6),
+        lat:          +(pos.lat + options.latOffset + (Math.random()-0.5) * posNoise).toFixed(6),
+        lng:          +(pos.lng + options.lngOffset + (Math.random()-0.5) * posNoise).toFixed(6),
         speed:        navStatus === NAV.MOORED ? 0 :
                       navStatus === NAV.ANCHOR ? +(rnd(0,0.5)).toFixed(1) :
                       +(noise(segSpeed, 0.08)).toFixed(1),
@@ -164,31 +165,37 @@ function navStatusText(code) {
 // ─── Behavior Simulators ──────────────────────────────────────────────────────
 
 function simulateLiner(vessel, startTime) {
+  const latOff = (Math.random()-0.5)*0.015;
+  const lngOff = (Math.random()-0.5)*0.015;
   // Container: Gulf → Pilot → Lach Huyen berth → stay → outbound
   const scenario = rndChoice(['inbound', 'outbound', 'at_berth']);
   if (scenario === 'inbound') {
     return interpolateRoute([
       GEO.gulfEntry, GEO.catHaiAnch, GEO.pilotStation, GEO.lachHuyen,
-      { lat: GEO.lachHuyen.lat+0.01, lng: GEO.lachHuyen.lng-0.01 },
+      { lat: GEO.lachHuyen.lat+0.005, lng: GEO.lachHuyen.lng-0.005 },
     ], 130, vessel.speedKn, startTime, {
+      latOffset: latOff, lngOffset: lngOff,
       navStatus: [NAV.UNDERWAY, NAV.ANCHOR, NAV.RESTRICTED, NAV.MOORED, NAV.MOORED],
     });
   } else if (scenario === 'outbound') {
     return interpolateRoute([
-      { lat: GEO.lachHuyen.lat+0.01, lng: GEO.lachHuyen.lng-0.01 },
+      { lat: GEO.lachHuyen.lat+0.005, lng: GEO.lachHuyen.lng-0.005 },
       GEO.lachHuyen, GEO.pilotStation, GEO.catHaiAnch, GEO.gulfEntry, GEO.gulfDeep,
     ], 130, vessel.speedKn, startTime, {
+      latOffset: latOff, lngOffset: lngOff,
       navStatus: [NAV.MOORED, NAV.RESTRICTED, NAV.UNDERWAY, NAV.UNDERWAY, NAV.UNDERWAY, NAV.UNDERWAY],
     });
   } else {
     // at berth — stationary
     return interpolateRoute([
-      GEO.lachHuyen, { lat: GEO.lachHuyen.lat+0.005, lng: GEO.lachHuyen.lng+0.005 },
-    ], 120, 0, startTime, { navStatus: [NAV.MOORED, NAV.MOORED] });
+      GEO.lachHuyen, { lat: GEO.lachHuyen.lat+0.002, lng: GEO.lachHuyen.lng+0.002 },
+    ], 120, 0, startTime, { latOffset: latOff, lngOffset: lngOff, navStatus: [NAV.MOORED, NAV.MOORED] });
   }
 }
 
 function simulateBulk(vessel, startTime) {
+  const latOff = (Math.random()-0.5)*0.015;
+  const lngOff = (Math.random()-0.5)*0.015;
   // Bulk: arrive Gulf → anchor wait → inbound → berth
   const weatherSlow = Math.random() < 0.3; // 30% chance of weather slowdown
   const speed = weatherSlow ? vessel.speedKn * 0.55 : vessel.speedKn;
@@ -196,81 +203,94 @@ function simulateBulk(vessel, startTime) {
     GEO.gulfDeep, GEO.gulfEntry,
     GEO.catHaiAnch,   // anchor wait
     GEO.catHaiAnch,   // still anchoring
-    GEO.pilotStation, GEO.lachHuyen,
-    { lat: GEO.lachHuyen.lat-0.02, lng: GEO.lachHuyen.lng+0.01 }, // berth
+    GEO.pilotStation, GEO.lachHuyen, GEO.namTrieu,
+    { lat: GEO.haiPhongPort.lat-0.005, lng: GEO.haiPhongPort.lng+0.005 }, // berth
   ], 140, speed, startTime, {
+    latOffset: latOff, lngOffset: lngOff,
     navStatus: [NAV.UNDERWAY, NAV.UNDERWAY, NAV.ANCHOR, NAV.ANCHOR,
-                NAV.RESTRICTED, NAV.RESTRICTED, NAV.MOORED],
-    speedOverride: [speed, speed, 0.3, 0.2, speed*0.3, speed*0.2, 0],
+                NAV.RESTRICTED, NAV.RESTRICTED, NAV.RESTRICTED, NAV.MOORED],
+    speedOverride: [speed, speed, 0.3, 0.2, speed*0.3, speed*0.2, speed*0.2, 0],
   });
 }
 
 function simulateTanker(vessel, startTime) {
+  const latOff = (Math.random()-0.5)*0.015;
+  const lngOff = (Math.random()-0.5)*0.015;
   const loaded = Math.random() < 0.5;
   const draft = loaded ? vessel.maxDraft : vessel.maxDraft * 0.55;
   return interpolateRoute([
     GEO.gulfDeep, GEO.gulfEntry, GEO.catHaiAnch, GEO.catHaiAnch,
-    GEO.pilotStation, GEO.haiPhongPort,
+    GEO.pilotStation, GEO.lachHuyen, GEO.namTrieu, GEO.haiPhongPort,
   ], 120, vessel.speedKn, startTime, {
+    latOffset: latOff, lngOffset: lngOff,
     navStatus: [NAV.UNDERWAY, NAV.UNDERWAY, NAV.ANCHOR, NAV.ANCHOR,
-                NAV.RESTRICTED, NAV.MOORED],
+                NAV.RESTRICTED, NAV.RESTRICTED, NAV.RESTRICTED, NAV.MOORED],
   });
 }
 
 function simulateCoastal(vessel, startTime) {
+  const latOff = (Math.random()-0.5)*0.015;
+  const lngOff = (Math.random()-0.5)*0.015;
   // General cargo: short coastal hops
   const ports = [GEO.haiPhongPort, GEO.lachHuyen,
                  { lat: 20.95, lng: 106.55 }, { lat: 21.05, lng: 106.45 }];
   const from = rndChoice(ports);
   const to   = rndChoice(ports.filter(p => p !== from));
-  return interpolateRoute([from, GEO.pilotStation, to], 110, vessel.speedKn, startTime, {
-    navStatus: [NAV.UNDERWAY, NAV.UNDERWAY, NAV.MOORED],
+  return interpolateRoute([from, GEO.namTrieu, GEO.pilotStation, to], 110, vessel.speedKn, startTime, {
+    latOffset: latOff, lngOffset: lngOff,
+    navStatus: [NAV.UNDERWAY, NAV.UNDERWAY, NAV.UNDERWAY, NAV.MOORED],
   });
 }
 
 function simulateTug(vessel, startTime) {
+  const latOff = (Math.random()-0.5)*0.015;
+  const lngOff = (Math.random()-0.5)*0.015;
   // Short patrol loops around port
   const base = GEO.lachHuyen;
   return interpolateRoute([
     base,
-    { lat: base.lat+0.05, lng: base.lng+0.02 },
-    { lat: base.lat+0.03, lng: base.lng-0.03 },
-    { lat: base.lat-0.02, lng: base.lng+0.04 },
+    { lat: base.lat+0.03, lng: base.lng+0.01 },
+    { lat: base.lat+0.02, lng: base.lng-0.02 },
+    { lat: base.lat-0.01, lng: base.lng+0.02 },
     base,
-  ], 100, vessel.speedKn, startTime, { navStatus: [0,0,0,0,5] });
+  ], 100, vessel.speedKn, startTime, { latOffset: latOff, lngOffset: lngOff, navStatus: [0,0,0,0,5] });
 }
 
 function simulateFishing(vessel, startTime) {
+  const latOff = (Math.random()-0.5)*0.02;
+  const lngOff = (Math.random()-0.5)*0.02;
   // Erratic fishing movement in Gulf
   const base = GEO.fishingGround;
   const waypoints = [base];
   for (let i = 0; i < 8; i++) {
     waypoints.push({
-      lat: base.lat + rnd(-0.5, 0.5),
-      lng: base.lng + rnd(-0.5, 0.5),
+      lat: base.lat + rnd(-0.2, 0.2),
+      lng: base.lng + rnd(-0.2, 0.2),
     });
   }
-  waypoints.push(base);
-  return interpolateRoute(waypoints, 120, vessel.speedKn, startTime,
-    { navStatus: waypoints.map(() => NAV.FISHING) });
+  return interpolateRoute(waypoints, 150, vessel.speedKn, startTime, { latOffset: latOff, lngOffset: lngOff, navStatus: [] });
 }
 
 function simulateFerry(vessel, startTime) {
+  const latOff = (Math.random()-0.5)*0.01;
+  const lngOff = (Math.random()-0.5)*0.01;
   // Cat Hai ferry: back and forth
   const catBi = { lat: 20.82, lng: 106.72 };
   const catHai = { lat: 20.78, lng: 106.95 };
   const loops = [catBi, catHai, catBi, catHai, catBi];
   return interpolateRoute(loops, 110, vessel.speedKn, startTime,
-    { navStatus: [0, 5, 0, 5, 5] });
+    { latOffset: latOff, lngOffset: lngOff, navStatus: [0, 5, 0, 5, 5] });
 }
 
 function simulateOffshore(vessel, startTime) {
+  const latOff = (Math.random()-0.5)*0.015;
+  const lngOff = (Math.random()-0.5)*0.015;
   return interpolateRoute([
-    GEO.haiPhongPort, GEO.gulfEntry, GEO.offshore1,
+    GEO.haiPhongPort, GEO.namTrieu, GEO.lachHuyen, GEO.gulfEntry, GEO.offshore1,
     { lat: GEO.offshore1.lat+0.2, lng: GEO.offshore1.lng+0.1 },
-    GEO.offshore1, GEO.gulfEntry, GEO.haiPhongPort,
+    GEO.offshore1, GEO.gulfEntry, GEO.lachHuyen, GEO.namTrieu, GEO.haiPhongPort,
   ], 120, vessel.speedKn, startTime,
-    { navStatus: [0,0,0,5,0,0,5] });
+    { latOffset: latOff, lngOffset: lngOff, navStatus: [0,0,0,0,5,0,0,0,0,5] });
 }
 
 const BEHAVIOR_MAP = {

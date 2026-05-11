@@ -1,11 +1,9 @@
-/**
- * components/maritime/ForecastChart.js
- * Canvas-based line chart for throughput forecast + confidence interval
- */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export default function ForecastChart({ data = [], history = [], height = 260 }) {
   const canvasRef = useRef(null);
+  const [hoverInfo, setHoverInfo] = useState(null);
+  const pointsRef = useRef([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -46,6 +44,13 @@ export default function ForecastChart({ data = [], history = [], height = 260 })
 
     const xOf = (i) => PAD.l + (i / (allPoints.length - 1)) * cW;
     const yOf = (v) => PAD.t + cH - ((v - minVal) / valRange * cH);
+
+    // Store points for hover detection
+    pointsRef.current = allPoints.map((p, i) => ({
+      ...p,
+      cx: xOf(i),
+      cy: yOf(p.value)
+    }));
 
     // ── Grid lines ──
     ctx.strokeStyle = 'rgba(255,255,255,0.05)';
@@ -90,6 +95,14 @@ export default function ForecastChart({ data = [], history = [], height = 260 })
       ctx.setLineDash([4, 4]);
       ctx.stroke();
       ctx.setLineDash([]);
+      
+      // History dots
+      histPoints.forEach((p, i) => {
+        ctx.beginPath();
+        ctx.arc(xOf(i), yOf(p.value), 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(148,163,184,0.8)';
+        ctx.fill();
+      });
     }
 
     // ── Forecast line ──
@@ -109,9 +122,12 @@ export default function ForecastChart({ data = [], history = [], height = 260 })
       // Dots
       fcstPoints.forEach((p, i) => {
         ctx.beginPath();
-        ctx.arc(xOf(fcstStart + i), yOf(p.value), 3, 0, Math.PI * 2);
+        ctx.arc(xOf(fcstStart + i), yOf(p.value), 3.5, 0, Math.PI * 2);
         ctx.fillStyle = '#38bdf8';
         ctx.fill();
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
       });
     }
 
@@ -140,7 +156,7 @@ export default function ForecastChart({ data = [], history = [], height = 260 })
     allPoints.forEach((p, i) => {
       if (i % step === 0) {
         const label = p.date?.slice(5) || '';
-        ctx.fillText(label, xOf(i), H - PAD.b + 14);
+        ctx.fillText(label, xOf(i), H - PAD.b + 16);
       }
     });
 
@@ -154,9 +170,109 @@ export default function ForecastChart({ data = [], history = [], height = 260 })
     ctx.fillStyle = '#38bdf8'; ctx.fillText('Dự báo AI', PAD.l+114, H-5);
   }, [data, history, height]);
 
+  const handleMouseMove = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !pointsRef.current.length) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    
+    // Find closest point by X coordinate
+    let closest = null;
+    let minDiff = Infinity;
+    for (const p of pointsRef.current) {
+      const diff = Math.abs(p.cx - x);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = p;
+      }
+    }
+
+    if (closest && minDiff < 40) {
+      setHoverInfo({
+        x: closest.cx,
+        y: closest.cy,
+        point: closest
+      });
+    } else {
+      setHoverInfo(null);
+    }
+  };
+
+  const handleMouseLeave = () => setHoverInfo(null);
+
   return (
-    <div style={{ width:'100%', height }}>
-      <canvas ref={canvasRef} style={{ width:'100%', height:'100%', display:'block' }}/>
+    <div style={{ width:'100%', height, position: 'relative' }}>
+      <canvas 
+        ref={canvasRef} 
+        style={{ width:'100%', height:'100%', display:'block', cursor: 'crosshair' }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+      />
+      
+      {/* Vertical Hover Line */}
+      {hoverInfo && (
+        <div style={{
+          position: 'absolute',
+          left: hoverInfo.x,
+          top: 20,
+          bottom: 40,
+          width: '1px',
+          background: hoverInfo.point.type === 'forecast' ? 'rgba(56,189,248,0.5)' : 'rgba(148,163,184,0.5)',
+          borderLeft: hoverInfo.point.type === 'forecast' ? '1px dashed rgba(56,189,248,0.8)' : '1px dashed rgba(148,163,184,0.8)',
+          pointerEvents: 'none'
+        }} />
+      )}
+
+      {/* Hover Tooltip */}
+      {hoverInfo && (
+        <div style={{
+          position: 'absolute',
+          left: hoverInfo.x,
+          top: hoverInfo.y - 12,
+          transform: 'translate(-50%, -100%)',
+          background: 'rgba(15,23,42,0.95)',
+          border: '1px solid rgba(56,189,248,0.4)',
+          borderRadius: '8px',
+          padding: '10px 14px',
+          color: '#fff',
+          fontSize: '0.75rem',
+          pointerEvents: 'none',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+          zIndex: 10,
+          whiteSpace: 'nowrap',
+          animation: 'fadeIn 0.15s ease'
+        }}>
+          <div style={{ color: '#94a3b8', marginBottom: '6px', fontWeight: 600, fontSize: '0.7rem', textTransform: 'uppercase' }}>
+            {hoverInfo.point.type === 'forecast' ? 'DỰ BÁO AI' : 'LỊCH SỬ'}: {hoverInfo.point.date}
+          </div>
+          <div style={{ color: hoverInfo.point.type === 'forecast' ? '#38bdf8' : '#e2e8f0', fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '2px' }}>
+            Sản lượng: {(hoverInfo.point.value / 1000).toFixed(1)}k tấn
+          </div>
+          {hoverInfo.point.type === 'forecast' && hoverInfo.point.low && (
+            <div style={{ color: '#64748b', fontSize: '0.75rem' }}>
+              Khoảng tin cậy: <span style={{color: '#a78bfa'}}>{(hoverInfo.point.low / 1000).toFixed(1)}k</span> - <span style={{color: '#a78bfa'}}>{(hoverInfo.point.high / 1000).toFixed(1)}k</span>
+            </div>
+          )}
+          {/* A small dot directly over the point */}
+          <div style={{
+            position: 'absolute',
+            left: '50%',
+            bottom: '-12px',
+            transform: 'translateX(-50%)',
+            width: '8px',
+            height: '8px',
+            background: hoverInfo.point.type === 'forecast' ? '#38bdf8' : '#e2e8f0',
+            borderRadius: '50%',
+            boxShadow: '0 0 10px rgba(56,189,248,0.8)'
+          }} />
+        </div>
+      )}
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translate(-50%, -90%); }
+          to { opacity: 1; transform: translate(-50%, -100%); }
+        }
+      `}</style>
     </div>
   );
 }

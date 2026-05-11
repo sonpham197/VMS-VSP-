@@ -25,20 +25,52 @@ const getStatusColor = (status) => {
   }
 };
 
-const createCustomIcon = (status, heading, fleetColor) => {
+const createCustomIcon = (vessel) => {
+  const { status, heading, fleetColor, speed, class_code, vessel_type } = vessel;
   const color = fleetColor || getStatusColor(status);
+  
+  const typeCode = (class_code || vessel_type || '').toLowerCase();
+  let svgPath = 'M12 2l-8 10 2 10 6-3 6 3 2-10z'; // Default Ship
+  
+  if (typeCode.includes('container')) {
+    svgPath = 'M6 6 L12 2 L18 6 L18 22 L6 22 Z'; // Container
+  } else if (typeCode.includes('bulk') || typeCode.includes('cargo')) {
+    svgPath = 'M6 8 Q12 0 18 8 L18 22 L6 22 Z'; // Bulk / Cargo
+  } else if (typeCode.includes('tanker')) {
+    svgPath = 'M7 8 Q12 0 17 8 L17 18 Q12 24 7 18 Z'; // Tanker (Pill shape)
+  } else if (typeCode.includes('tug')) {
+    svgPath = 'M6 10 Q12 4 18 10 L18 18 Q12 20 6 18 Z'; // Tugboat
+  } else if (typeCode.includes('fish')) {
+    svgPath = 'M8 10 Q12 4 16 10 L15 18 L9 18 Z'; // Fishing
+  } else if (typeCode.includes('passenger') || typeCode.includes('ferry')) {
+    svgPath = 'M6 6 Q12 0 18 6 L18 18 Q12 22 6 18 Z'; // Passenger
+  } else if (typeCode.includes('offshore')) {
+    svgPath = 'M5 8 L12 2 L19 8 L19 20 L5 20 Z'; // Offshore
+  }
+
   // Basic ship shape svg pointing upwards. We rotate the wrapper.
   const svgIcon = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${color}" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="24" height="24">
-      <path d="M12 2l-8 10 2 10 6-3 6 3 2-10z" />
+      <path d="${svgPath}" />
     </svg>
   `;
+
+  // Determine if vessel is stopped (moored/anchored)
+  const isStopped = speed !== undefined && speed < 0.5;
+  const badgeHtml = isStopped ? `
+    <div style="position:absolute; right:-6px; bottom:-6px; background:#1e293b; border:1px solid rgba(255,255,255,0.2); border-radius:50%; width:16px; height:16px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(0,0,0,0.5); z-index: 10;">
+      <span style="font-size:10px; line-height:1;">⚓</span>
+    </div>
+  ` : '';
 
   return L.divIcon({
     className: 'custom-vessel-icon',
     html: `
-      <div class="pulsing-container ${status === 'danger' ? 'pulsing-danger' : ''}" style="transform: rotate(${heading || 0}deg); width:24px; height:24px; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));">
-        ${svgIcon}
+      <div style="position: relative; width: 24px; height: 24px;">
+        <div class="pulsing-container ${status === 'danger' ? 'pulsing-danger' : ''}" style="transform: rotate(${heading || 0}deg); width:100%; height:100%; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));">
+          ${svgIcon}
+        </div>
+        ${badgeHtml}
       </div>
     `,
     iconSize: [24, 24],
@@ -424,7 +456,7 @@ export default function MapView({ vessels, tracks, predictedTracks = [], routeDa
         <Marker
           key={`marker-${vessel.id || vessel.Vessel_id}`}
           position={[vessel.lat, vessel.lng]}
-          icon={createCustomIcon(vessel.status, vessel.heading, vessel.fleetColor)}
+          icon={createCustomIcon(vessel)}
           eventHandlers={{
             click: () => onSelectVessel(vessel),
             contextmenu: (e) => {

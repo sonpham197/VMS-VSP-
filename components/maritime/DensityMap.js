@@ -14,12 +14,15 @@ export default function DensityMap() {
 
   useEffect(() => {
     let map, L, heat;
+    let isMounted = true;
 
     async function init() {
       if (typeof window === 'undefined') return;
       L = (await import('leaflet')).default;
       await import('leaflet/dist/leaflet.css');
       const LH = (await import('leaflet.heat')).default;
+
+      if (!isMounted) return;
 
       if (mapRef.current && !leafletRef.current) {
         map = L.map(mapRef.current, { center: [20.78, 106.88], zoom: 11 });
@@ -32,9 +35,12 @@ export default function DensityMap() {
         // Fetch heatmap data
         const res = await fetch('/api/maritime/density?hours=24');
         const d = await res.json();
+        
+        if (!isMounted) return;
+
         setStatusCount(d.statusCount || {});
 
-        if (d.heatmapPoints?.length) {
+        if (d.heatmapPoints?.length && leafletRef.current) {
           heat = L.heatLayer(d.heatmapPoints, {
             radius: 25, blur: 18, maxZoom: 14,
             gradient: { 0.2:'#1e40af', 0.5:'#0ea5e9', 0.7:'#f59e0b', 1:'#ef4444' },
@@ -60,7 +66,13 @@ export default function DensityMap() {
     }
 
     init();
-    return () => { if (leafletRef.current) { leafletRef.current.remove(); leafletRef.current = null; } };
+    return () => { 
+      isMounted = false;
+      if (leafletRef.current) { 
+        leafletRef.current.remove(); 
+        leafletRef.current = null; 
+      } 
+    };
   }, []);
 
   const total = Object.values(statusCount).reduce((s,v)=>s+v,0) || 1;

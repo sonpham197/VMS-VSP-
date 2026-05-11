@@ -19,10 +19,10 @@ const AnomalyFeed     = dynamic(() => import('@/components/maritime/AnomalyFeed'
 const AnchoragePanel  = dynamic(() => import('@/components/maritime/AnchoragePanel'),  { ssr: false });
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
-function KpiCard({ icon: Icon, label, value, sub, color = '#38bdf8', change }) {
+function KpiCard({ icon: Icon, label, value, sub, color = '#38bdf8', change, hint }) {
   const isPos = change > 0;
   return (
-    <div className="kpi-card">
+    <div className="kpi-card has-tooltip">
       <div className="kpi-icon" style={{ background: `${color}22`, color }}>
         <Icon size={20} />
       </div>
@@ -37,6 +37,7 @@ function KpiCard({ icon: Icon, label, value, sub, color = '#38bdf8', change }) {
           {Math.abs(change)}%
         </div>
       )}
+      {hint && <div className="kpi-tooltip">{hint}</div>}
     </div>
   );
 }
@@ -47,7 +48,7 @@ function CongestionGauge({ value = 0 }) {
   const color = pct > 0.7 ? '#ef4444' : pct > 0.4 ? '#f59e0b' : '#10b981';
   const deg = pct * 180;
   return (
-    <div className="gauge-wrap">
+    <div className="gauge-wrap has-tooltip">
       <div className="gauge-arc-container">
         <svg viewBox="0 0 120 65" width="160" height="90">
           <path d="M10,60 A50,50 0 0,1 110,60" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="12" strokeLinecap="round"/>
@@ -62,6 +63,9 @@ function CongestionGauge({ value = 0 }) {
       </div>
       <div className="gauge-label" style={{ color }}>
         {pct > 0.7 ? '🔴 Tắc nghẽn cao' : pct > 0.4 ? '🟡 Trung bình' : '🟢 Bình thường'}
+      </div>
+      <div className="kpi-tooltip">
+        Trạng thái tắc nghẽn hiện tại của toàn bộ cảng. Nếu trên 70%, các tàu sắp tới nên giảm tốc độ hoặc chuyển hướng để tránh ùn ứ.
       </div>
     </div>
   );
@@ -190,19 +194,24 @@ export default function MaritimeIntelligence() {
           <KpiCard icon={Package} label="Sản lượng hôm nay" color="#3b82f6"
             value={s.throughput_today ? `${(s.throughput_today/1000).toFixed(1)}k tấn` : '—'}
             change={s.throughput_change_pct}
-            sub={`7 ngày: ${s.throughput_7d ? (s.throughput_7d/1000).toFixed(0)+'k tấn' : '—'}`}/>
+            sub={`7 ngày: ${s.throughput_7d ? (s.throughput_7d/1000).toFixed(0)+'k tấn' : '—'}`}
+            hint="Tổng ước lượng khối lượng hàng hóa thông qua cảng (Dựa trên mớn nước và DWT thực tế) trong 24h qua." />
           <KpiCard icon={Ship} label="Tàu vào hôm nay" color="#10b981"
             value={s.vessel_arrivals_today ?? '—'}
-            sub={`30 ngày: ${s.vessel_count_30d ?? '—'} lượt`}/>
+            sub={`30 ngày: ${s.vessel_count_30d ?? '—'} lượt`}
+            hint="Số lượng tàu thuyền đi vào khu vực neo đậu hoặc cập bến trong ngày hôm nay." />
           <KpiCard icon={Clock} label="Thời gian chờ TB" color="#f59e0b"
             value={s.avg_wait_hours_today ? `${s.avg_wait_hours_today.toFixed(1)}h` : '—'}
-            sub="Trung bình 7 ngày"/>
+            sub="Trung bình 7 ngày"
+            hint="Thời gian trung bình một con tàu phải neo chờ tại vùng neo Cát Hải trước khi được điều động vào cầu bến." />
           <KpiCard icon={Zap} label="Chỉ số tắc nghẽn" color="#ef4444"
             value={s.congestion_index_today ? `${(s.congestion_index_today*100).toFixed(0)}%` : '—'}
-            sub={`Bến: ${s.berth_occupancy_today?.toFixed(0) ?? '—'}% chiếm dụng`}/>
+            sub={`Bến: ${s.berth_occupancy_today?.toFixed(0) ?? '—'}% chiếm dụng`}
+            hint="Chỉ số tổng hợp phản ánh mức độ kẹt cảng. Tính toán từ hệ số chiếm dụng bến và tỷ lệ tàu phải neo chờ." />
           <KpiCard icon={BarChart2} label="Sản lượng 30 ngày" color="#a78bfa"
             value={s.throughput_30d ? `${(s.throughput_30d/1000).toFixed(0)}k tấn` : '—'}
-            sub="Dự báo tháng tới ↗"/>
+            sub="Dự báo tháng tới ↗"
+            hint="Tổng sản lượng hàng hóa luân chuyển qua cụm cảng trong 30 ngày qua (dữ liệu lịch sử)." />
         </div>
 
         {/* ── Main content ── */}
@@ -219,13 +228,16 @@ export default function MaritimeIntelligence() {
               </div>
 
               {/* Vessel class distribution */}
-              <div className="mi-card span-2">
+              <div className="mi-card span-2 has-tooltip">
                 <div className="mi-card-title"><Ship size={16}/> Phân loại đội tàu (100 tàu demo)</div>
                 <ClassDistribution data={classDist}/>
+                <div className="kpi-tooltip">
+                  Thống kê số lượng phương tiện theo chuẩn phân loại IMO. Giúp đánh giá cơ cấu trọng tải đang lưu thông trong khu vực.
+                </div>
               </div>
 
               {/* AI anomaly summary */}
-              <div className="mi-card span-1">
+              <div className="mi-card span-1 has-tooltip">
                 <div className="mi-card-title"><AlertTriangle size={16}/> Cảnh báo đang mở</div>
                 {anomalyData?.summary ? (
                   <div className="anomaly-summary">
@@ -235,6 +247,9 @@ export default function MaritimeIntelligence() {
                     <div className="anom-total">Tổng {anomalyData.summary.total_open || 0} sự kiện đang mở</div>
                   </div>
                 ) : <div className="mi-empty">Đang tải...</div>}
+                <div className="kpi-tooltip">
+                  Các sự kiện bất thường được AI phát hiện (VD: Sai lệch lộ trình, Mất tín hiệu AIS, Thay đổi mớn nước bất thường).
+                </div>
               </div>
 
               {/* 7-day forecast preview */}
@@ -335,6 +350,37 @@ export default function MaritimeIntelligence() {
         .kpi-change { display:flex; align-items:center; gap:2px; font-size:0.72rem; font-weight:700; padding:3px 6px; border-radius:6px; flex-shrink:0; }
         .kpi-change.pos { color:#34d399; background:rgba(52,211,153,0.1); }
         .kpi-change.neg { color:#f87171; background:rgba(248,113,113,0.1); }
+
+        /* Tooltips */
+        .has-tooltip { position: relative; cursor: help; }
+        .kpi-tooltip {
+          position: absolute;
+          top: 115%;
+          left: 50%;
+          transform: translateX(-50%) translateY(10px);
+          background: rgba(15,23,42,0.95);
+          color: #e2e8f0;
+          font-size: 0.75rem;
+          padding: 10px 14px;
+          border-radius: 8px;
+          border: 1px solid rgba(56,189,248,0.3);
+          width: max-content;
+          max-width: 260px;
+          white-space: normal;
+          text-align: center;
+          line-height: 1.4;
+          pointer-events: none;
+          opacity: 0;
+          visibility: hidden;
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+          z-index: 9999;
+        }
+        .has-tooltip:hover .kpi-tooltip {
+          opacity: 1;
+          visibility: visible;
+          transform: translateX(-50%) translateY(0);
+        }
 
         /* Main */
         .mi-main { flex:1; overflow-y:auto; padding:16px 20px; }
