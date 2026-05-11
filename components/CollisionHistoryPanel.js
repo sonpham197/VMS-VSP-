@@ -11,7 +11,7 @@
  * ──────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import {
   X, ShieldAlert, AlertTriangle, Info,
@@ -38,15 +38,18 @@ export default function CollisionHistoryPanel({ isOpen, onClose, onLocate }) {
   const [events, setEvents]         = useState([]);
   const [loading, setLoading]       = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');   // all | open | acknowledged | closed
-  const [page, setPage]             = useState(0);
   const [hasMore, setHasMore]       = useState(true);
   const [total, setTotal]           = useState(0);
+  const [statusCounts, setStatusCounts] = useState({ open: 0, acknowledged: 0, closed: 0 });
   const [filterOpen, setFilterOpen] = useState(false);
+  // Dùng ref thay vì state cho page để tránh stale closure trong useCallback
+  const pageRef = useRef(0);
 
   // ── Fetch ──────────────────────────────────────────────────────────────
   const fetchEvents = useCallback(async (reset = false) => {
     setLoading(true);
-    const currentPage = reset ? 0 : page;
+    if (reset) pageRef.current = 0;
+    const currentPage = pageRef.current;
 
     let query = supabase
       .from('alerts')
@@ -72,18 +75,39 @@ export default function CollisionHistoryPanel({ isOpen, onClose, onLocate }) {
       setEvents(reset ? (data || []) : prev => [...prev, ...(data || [])]);
       setTotal(count || 0);
       setHasMore((data || []).length === PAGE_SIZE);
-      if (!reset) setPage(p => p + 1);
-      else setPage(1);
+      pageRef.current = currentPage + 1;
     }
 
+    // Fetch status counts riêng để stats bar luôn hiển thị đúng
+    // (không bị ảnh hưởng bởi bộ lọc đang active)
+    fetchStatusCounts();
+
     setLoading(false);
-  }, [page, filterStatus]);
+  }, [filterStatus]);   // Chỉ phụ thuộc filterStatus — page dùng ref
+
+  // Fetch tổng số theo từng status (dùng cho stats bar)
+  const fetchStatusCounts = useCallback(async () => {
+    const statuses = ['open', 'acknowledged', 'closed'];
+    const counts = { open: 0, acknowledged: 0, closed: 0 };
+    await Promise.all(
+      statuses.map(async (s) => {
+        const { count } = await supabase
+          .from('alerts')
+          .select('id', { count: 'exact', head: true })
+          .eq('alert_type', 'collision_risk')
+          .eq('status', s);
+        counts[s] = count || 0;
+      })
+    );
+    setStatusCounts(counts);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
       fetchEvents(true);
     }
-  }, [isOpen, filterStatus]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, filterStatus]);  // fetchEvents stable vì chỉ phụ thuộc filterStatus
 
   // ── Đóng cảnh báo (status → closed) ────────────────────────────────────
   const closeEvent = async (id) => {
@@ -162,7 +186,7 @@ export default function CollisionHistoryPanel({ isOpen, onClose, onLocate }) {
         {/* ── Stats bar ── */}
         <div className="chp-stats">
           {['open', 'acknowledged', 'closed'].map(s => {
-            const count = events.filter(e => e.status === s).length;
+            const count = statusCounts[s];
             const cfg = STATUS_CONFIG[s];
             return (
               <div key={s} className="chp-stat-item" style={{ color: cfg.color }}>
@@ -291,7 +315,7 @@ export default function CollisionHistoryPanel({ isOpen, onClose, onLocate }) {
               onClick={() => fetchEvents(false)}
               disabled={loading}
             >
-              {loading ? 'Đang tải...' : `Tải thêm (trang ${page + 1})`}
+              {loading ? 'Đang tải...' : `Tải thêm (còn ${total - events.length} sự kiện)`}
               <ChevronDown size={14} />
             </button>
           )}

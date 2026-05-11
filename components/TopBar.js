@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { BarChart2, ShieldAlert, AlertTriangle, CheckCircle2, Users, LogOut, Ship, Layers, Settings } from 'lucide-react';
+import { BarChart2, ShieldAlert, AlertTriangle, CheckCircle2, Users, LogOut, Ship, Layers, Settings, Brain } from 'lucide-react';
 
 export default function TopBar({ vessels = [], fleets = [], selectedFleetId = 'all', onSelectFleet, onManageFleets }) {
   const router = useRouter();
@@ -90,6 +90,10 @@ export default function TopBar({ vessels = [], fleets = [], selectedFleetId = 'a
         <button className="nav-btn customers-btn" onClick={() => router.push('/customers')}>
           <Users size={16} />
           <span>Khách hàng</span>
+        </button>
+        <button className="nav-btn maritime-ai-btn" onClick={() => router.push('/maritime-intelligence')}>
+          <Brain size={16} />
+          <span>Trí tuệ AI</span>
         </button>
 
         {currentUser && (
@@ -256,6 +260,15 @@ export default function TopBar({ vessels = [], fleets = [], selectedFleetId = 'a
         .logout-btn:hover {
           background: rgba(239,68,68,0.15);
           color: #fca5a5;
+        }
+        .maritime-ai-btn {
+          background: rgba(167,139,250,0.1);
+          border-color: rgba(167,139,250,0.3);
+          color: #a78bfa;
+        }
+        .maritime-ai-btn:hover {
+          background: rgba(167,139,250,0.2);
+          color: #c4b5fd;
         }
         .user-info {
           display: flex;

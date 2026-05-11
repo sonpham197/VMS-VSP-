@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Bell, ShieldAlert, AlertTriangle, Info, CheckCircle, X, MapPin, Anchor, Navigation } from 'lucide-react';
 
-export default function AlertDrawer({ isOpen, onClose, onLocate }) {
+export default function AlertDrawer({ isOpen, onClose, onLocate, liveCollisionRisks = [] }) {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('zone'); // 'zone' | 'collision'
@@ -78,7 +78,35 @@ export default function AlertDrawer({ isOpen, onClose, onLocate }) {
   if (!isOpen) return null;
 
   const zoneAlerts       = alerts.filter(a => !a.alert_type || a.alert_type === 'zone_violation' || a.alert_type === 'speed_limit');
-  const collisionAlerts  = alerts.filter(a => a.alert_type === 'collision_risk');
+  const dbCollisionAlerts = alerts.filter(a => a.alert_type === 'collision_risk');
+
+  // Merge: DB records (ground truth) + live risks từ engine chưa có trong DB
+  // Composite key giống API: sort([idA, idB]).join('__')
+  const dbKeys = new Set(
+    dbCollisionAlerts
+      .filter(a => a.vessel_id && a.vessel_id_b)
+      .map(a => [a.vessel_id, a.vessel_id_b].sort().join('__'))
+  );
+  const liveOnlyRisks = liveCollisionRisks.filter(r => {
+    const key = [r.vesselA.Vessel_id, r.vesselB.Vessel_id].sort().join('__');
+    return !dbKeys.has(key);
+  }).map(r => ({
+    // Đổi sang format tương thích AlertCard
+    id:          `live__${r.id}`,
+    alert_type:  'collision_risk',
+    severity:    r.risk_level,
+    status:      'open',
+    vessel_id:   r.vesselA.Vessel_id,
+    vessel_id_b: r.vesselB.Vessel_id,
+    cpa_nm:      r.cpa_nm,
+    tcpa_min:    r.tcpa_min,
+    description: `Va chạm tiềm ẩn (real-time): CPA ${r.cpa_nm.toFixed(2)} NM, TCPA ${Math.round(r.tcpa_min)} phút`,
+    created_at:  r.detectedAt,
+    vessels:     { Vessel_name: r.vesselA.Vessel_name || r.vesselA.Vessel_id },
+    _live: true,   // đánh dấu là real-time, chưa persist
+  }));
+
+  const collisionAlerts  = [...dbCollisionAlerts, ...liveOnlyRisks];
   const displayedAlerts  = activeTab === 'collision' ? collisionAlerts : zoneAlerts;
 
   return (
@@ -129,7 +157,15 @@ export default function AlertDrawer({ isOpen, onClose, onLocate }) {
               >
                 <div className="alert-card-header">
                   {getAlertIcon(alert.severity)}
-                  <span className="vessel-name">{alert.vessels?.Vessel_name || alert.vessel_id}</span>
+                  <span className="vessel-name">
+                    {alert.vessels?.Vessel_name || alert.vessel_id}
+                    {alert.vessel_id_b && (
+                      <span style={{ color: '#64748b', fontWeight: 400 }}> ↔ {alert.vessel_id_b}</span>
+                    )}
+                  </span>
+                  {alert._live && (
+                    <span style={{ fontSize: '0.65rem', background: 'rgba(245,158,11,0.2)', color: '#fbbf24', padding: '1px 6px', borderRadius: 4, marginLeft: 4 }}>LIVE</span>
+                  )}
                   <span className="alert-time">{new Date(alert.created_at).toLocaleTimeString()}</span>
                 </div>
                 
@@ -138,13 +174,19 @@ export default function AlertDrawer({ isOpen, onClose, onLocate }) {
                   {alert.event_count > 1 && (
                     <div className="event-badge">Đã diễn ra {alert.event_count} lần</div>
                   )}
+                  {alert.cpa_nm != null && (
+                    <div style={{ display: 'flex', gap: 12, marginTop: 6, fontSize: '0.78rem', color: '#94a3b8' }}>
+                      <span>CPA: <b style={{ color: statusColors[alert.severity] }}>{Number(alert.cpa_nm).toFixed(2)} NM</b></span>
+                      <span>TCPA: <b style={{ color: statusColors[alert.severity] }}>{Math.round(alert.tcpa_min)} ph</b></span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="alert-actions">
                   <button className="action-btn map" onClick={() => onLocate(alert)}>
                     <MapPin size={16} /> Định vị
                   </button>
-                  {alert.status === 'open' && (
+                  {!alert._live && alert.status === 'open' && (
                     <button className="action-btn ack" onClick={() => handleAcknowledge(alert.id)}>
                       <CheckCircle size={16} /> Chấp nhận
                     </button>

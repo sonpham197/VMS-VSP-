@@ -1,8 +1,9 @@
 # TÀI LIỆU THIẾT KẾ CƠ SỞ DỮ LIỆU CHI TIẾT
 ## Hệ thống Giám sát Tàu biển (VMS Marine)
-**Phiên bản:** 2.2 | **Cập nhật:** 2026-05-08 | **Nền tảng:** Supabase (PostgreSQL 15 + PostGIS)
+**Phiên bản:** 2.3 | **Cập nhật:** 2026-05-11 | **Nền tảng:** Supabase (PostgreSQL 15 + PostGIS)
 
 > **Changelog:**
+> - **v2.3** (2026-05-11) — Tích hợp Module Trí tuệ Hàng hải AI: schema `maritime_intelligence_schema.sql` (bảng `ais_messages`, `port_zones`, `voyages`, `port_kpis`, `ai_forecasts`, `anomalies`).
 > - **v2.2** (2026-05-08) — Bổ sung schema Collision Warning System (CWS): cột `alert_type`, `vessel_id_b`, `cpa_nm`, `tcpa_min`, `event_count` vào bảng `alerts`; FK `alerts_vessel_id_b_fkey`; index `idx_alerts_collision`; migration file `collision_warning_setup.sql`
 > - **v2.1** (2026-05-07) — Thêm bảng `alerts`, Geofencing triggers, PostGIS spatial index
 > - **v2.0** (2026-05-01) — Schema ban đầu: `vessels`, `vessel_tracks`, `zones`, `customers`
@@ -148,6 +149,16 @@ erDiagram
 - `id` (UUID), `vessel_id` (TEXT), `rule_id` (UUID), `severity`, `status`.
 - `last_position` (GEOMETRY(Point, 4326)): Điểm vi phạm cuối.
 - `event_count` (INT): Số lần vi phạm.
+
+### 3.4 Module Trí tuệ Hàng hải AI (Maritime Intelligence)
+Lưu trữ dữ liệu phục vụ riêng cho cụm tính toán AI cảng biển.
+- **`ais_messages`**: Lưu trữ tín hiệu AIS gốc (chưa qua xử lý tracking), dùng để phân tích mật độ (Heatmap).
+- **`port_zones`**: Định nghĩa tọa độ các vùng neo, vùng bến, điểm đón trả hoa tiêu.
+- **`voyages`**: Quản lý lịch trình, thời gian chờ (waiting time), thời gian bến (turnaround time), ước tính lượng hàng hóa dựa trên tải trọng.
+- **`vessel_events`**: Ghi nhận các mốc sự kiện neo/cập bến.
+- **`port_kpis`**: Bảng dữ liệu đã tổng hợp theo ngày (aggregate KPIs) phục vụ thuật toán AI dự báo.
+- **`ai_forecasts`**: Lưu trữ kết quả dự báo sản lượng và chỉ số tắc nghẽn của mô hình AI (horizon 7/30 ngày).
+- **`anomalies`**: Cảnh báo bất thường chuyên sâu (vd: tắc nghẽn vùng neo, ETA lệch) cho người quản lý cảng.
 
 ---
 

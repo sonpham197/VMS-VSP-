@@ -1,14 +1,15 @@
 # TÀI LIỆU THIẾT KẾ TỔNG THỂ HỆ THỐNG - VESSEL MONITORING SYSTEM (VMS)
 
-> **Phiên bản:** 2.1 | **Cập nhật:** 2026-05-08
+> **Phiên bản:** 2.2 | **Cập nhật:** 2026-05-11
 >
 > **Changelog:**
+> - **v2.2** (2026-05-11) — Tích hợp Module Trí tuệ Hàng hải AI (Maritime Intelligence): Dự báo sản lượng (XGBoost/LSTM), Bản đồ mật độ (Heatmap), Phát hiện bất thường vùng neo đậu.
 > - **v2.1** (2026-05-08) — Tích hợp Collision Warning System (CWS): CPA/TCPA engine, CollisionAlert UI, CollisionOverlay, CollisionHistoryPanel, DashboardMenu CPA layer control, layout phân vùng UI
 > - **v2.0** (2026-05-07) — Track Replay, Fleet Grouping, Geofencing, Weather Layers, AlertDrawer
 > - **v1.0** (2026-05-01) — Core: Real-time tracking, AI prediction, route optimization
 
 ## 1. Tổng quan hệ thống
-Hệ thống Giám sát Tàu thuyền (Vessel Monitoring System - VMS) là một ứng dụng Web thời gian thực được thiết kế để theo dõi vị trí, trạng thái và lịch sử hành trình của đội tàu. Hệ thống tích hợp Trí tuệ nhân tạo (AI) để dự báo quỹ đạo và các thuật toán hình học để tối ưu hóa hải trình dựa trên nhiều tiêu chí (ETA, Nhiên liệu, Thời tiết, Rủi ro). Phiên bản mới nhất bổ sung **Hệ thống Cảnh báo Va chạm (CWS)** theo tiêu chuẩn COLREGS.
+Hệ thống Giám sát Tàu thuyền (Vessel Monitoring System - VMS) là một ứng dụng Web thời gian thực được thiết kế để theo dõi vị trí, trạng thái và lịch sử hành trình của đội tàu. Hệ thống tích hợp Trí tuệ nhân tạo (AI) để phân tích, dự báo quỹ đạo, tính toán mật độ hàng hải, và tối ưu hóa hải trình. Phiên bản mới nhất bổ sung **Module Trí tuệ Hàng hải AI (Maritime Intelligence)** phục vụ phân tích cụm cảng biển.
 
 ### Các tính năng chính:
 - **Theo dõi thời gian thực (Real-time Tracking)**: Hiển thị vị trí tàu tức thời trên bản đồ tương tác với cập nhật dữ liệu liên tục qua WebSockets.
@@ -18,7 +19,8 @@ Hệ thống Giám sát Tàu thuyền (Vessel Monitoring System - VMS) là một
 - **Lớp phủ Khí tượng & Hải dương (Weather & Velocity Layers)**: Hiển thị lớp bản đồ hàng hải và khí tượng (dòng chảy, sức gió, v.v.) với thiết kế Glassmorphism trực quan, hỗ trợ điều hướng an toàn.
 - **Dự báo quỹ đạo AI**: Sử dụng mạng thần kinh LSTM để dự đoán hướng đi của tàu trong tương lai (4h - 24h).
 - **Tối ưu lộ trình (ETA Optimization)**: Tính toán đường đi ngắn nhất tránh đất liền và đề xuất lộ trình tối ưu dựa trên hàm chi phí linh hoạt.
-- **Cảnh báo Va chạm (CWS — v2.1 mới)**: Tính toán CPA/TCPA theo thời gian thực cho tất cả cặp tàu, phân loại mức nguy hiểm (Danger/Warning/Info), hiển thị toast UI, overlay bản đồ, âm thanh cảnh báo, lưu trữ lịch sử và bộ điều khiển layer trong DashboardMenu.
+- **Cảnh báo Va chạm (CWS)**: Tính toán CPA/TCPA theo thời gian thực cho tất cả cặp tàu, phân loại mức nguy hiểm, lưu trữ lịch sử và cảnh báo UI.
+- **Trí tuệ Hàng hải AI (Maritime Intelligence — v2.2 mới)**: Cung cấp Dashboard toàn cảnh tình hình khu vực cảng. Phân tích lưu lượng hàng hóa, dự báo 7/30 ngày (sử dụng thuật toán Gradient Boosting/Trend Analysis), biểu đồ mật độ (Heatmap), và phát hiện bất thường tự động (chống tắc nghẽn, theo dõi khu neo đậu).
 
 
 ---

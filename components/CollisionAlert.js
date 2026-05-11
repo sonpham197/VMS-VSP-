@@ -11,6 +11,7 @@
  *   isMuted           {boolean}  - Trạng thái mute âm thanh
  *   toggleMute        {Function} - Bật/tắt âm thanh
  *   onLocate          {Function} - Callback({ vesselA, vesselB }) zoom bản đồ
+ *   onOpenCpaHistory  {Function} - Callback() mở panel Lịch sử CPA
  * ──────────────────────────────────────────────────────────────────────────
  */
 
@@ -20,8 +21,8 @@ import {
   X, CheckCheck, MapPin, Volume2, VolumeX, ChevronDown, ChevronUp,
 } from 'lucide-react';
 
-// Số lượng toast tối đa hiển thị cùng lúc (phần còn lại thu gọn)
-const MAX_VISIBLE = 3;
+// Số lượng toast tối đa hiển thị khi chưa expand (phần còn lại có thể xem thêm)
+const MAX_VISIBLE = 5;
 
 export default function CollisionAlert({
   activeRisks = [],
@@ -30,8 +31,11 @@ export default function CollisionAlert({
   isMuted,
   toggleMute,
   onLocate,
+  onOpenCpaHistory,
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  // Trạng thái expand: hiện toàn bộ danh sách hay chỉ MAX_VISIBLE
+  const [showAll, setShowAll] = useState(false);
   // Track IDs đã được animate-out để không re-render giật
   const [exitingIds, setExitingIds] = useState(new Set());
   const prevCountRef = useRef(0);
@@ -54,8 +58,9 @@ export default function CollisionAlert({
   const warningRisks = activeRisks.filter(r => r.risk_level === 'warning');
   const infoRisks    = activeRisks.filter(r => r.risk_level === 'info');
 
-  const visibleRisks  = activeRisks.slice(0, MAX_VISIBLE);
-  const hiddenCount   = Math.max(0, activeRisks.length - MAX_VISIBLE);
+  // Khi showAll=true hiện tất cả; khi false chỉ hiện MAX_VISIBLE
+  const visibleRisks  = showAll ? activeRisks : activeRisks.slice(0, MAX_VISIBLE);
+  const hiddenCount   = showAll ? 0 : Math.max(0, activeRisks.length - MAX_VISIBLE);
 
   const handleAck = (riskId) => {
     setExitingIds(prev => new Set(prev).add(riskId));
@@ -240,12 +245,41 @@ export default function CollisionAlert({
             );
           })}
 
-          {/* Hiển thị phần thu gọn nếu có nhiều hơn MAX_VISIBLE */}
+          {/* Hiển thị thanh expand nếu còn cảnh báo bị ẩn */}
           {hiddenCount > 0 && (
             <div className="hidden-count-bar">
-              +{hiddenCount} cảnh báo khác
-              <button className="ctrl-btn" style={{ marginLeft: 8 }} onClick={acknowledgeAll}>
-                Xác nhận tất cả
+              <span>+{hiddenCount} cảnh báo khác</span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  className="ctrl-btn ctrl-expand"
+                  onClick={() => setShowAll(true)}
+                  title="Mở rộng danh sách"
+                >
+                  Xem tất cả
+                </button>
+                {onOpenCpaHistory && (
+                  <button
+                    className="ctrl-btn ctrl-history"
+                    onClick={onOpenCpaHistory}
+                    title="Mở lịch sử CPA"
+                  >
+                    Lịch sử
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Nút thu gọn lại khi đang showAll */}
+          {showAll && activeRisks.length > MAX_VISIBLE && (
+            <div className="hidden-count-bar">
+              <span>Đang hiện tất cả {activeRisks.length} cảnh báo</span>
+              <button
+                className="ctrl-btn ctrl-expand"
+                onClick={() => setShowAll(false)}
+                title="Thu gọn"
+              >
+                Thu gọn
               </button>
             </div>
           )}
@@ -511,6 +545,18 @@ export default function CollisionAlert({
           justify-content: space-between;
           backdrop-filter: blur(8px);
         }
+        .ctrl-expand {
+          color: #38bdf8;
+          border-color: rgba(56,189,248,0.3);
+          background: rgba(56,189,248,0.08);
+        }
+        .ctrl-expand:hover { background: rgba(56,189,248,0.18); color: #7dd3fc; }
+        .ctrl-history {
+          color: #a78bfa;
+          border-color: rgba(167,139,250,0.3);
+          background: rgba(167,139,250,0.08);
+        }
+        .ctrl-history:hover { background: rgba(167,139,250,0.18); color: #c4b5fd; }
       `}</style>
     </div>
   );

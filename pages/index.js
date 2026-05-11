@@ -139,6 +139,7 @@ export default function Home() {
   // ── Collision Warning Engine ──────────────────────────────────────────
   // Khai báo sau filteredVessels để đúng thứ tự React hook
   const {
+    collisionRisks,
     activeRisks,
     acknowledgeRisk,
     acknowledgeAll,
@@ -448,6 +449,7 @@ export default function Home() {
         isOpen={isAlertDrawerOpen}
         onClose={() => setIsAlertDrawerOpen(false)}
         onLocate={handleLocateAlert}
+        liveCollisionRisks={collisionRisks}
       />
 
       {/* Collision Warning Toast Stack - góc trên TRÁI để không che DashboardMenu */}
@@ -458,6 +460,7 @@ export default function Home() {
         isMuted={isMuted}
         toggleMute={toggleMute}
         onLocate={handleLocateCollision}
+        onOpenCpaHistory={() => setShowCpaHistory(true)}
       />
 
       {/* CPA History Panel */}

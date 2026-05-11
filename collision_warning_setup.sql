@@ -46,6 +46,14 @@ BEGIN
   END IF;
 END $$;
 
+-- 7. Thêm cột event_count (số lần cặp tàu này được phát hiện nguy cơ)
+--    Technical debt từ session notes: chưa có trong migration gốc
+ALTER TABLE alerts
+  ADD COLUMN IF NOT EXISTS event_count INT DEFAULT 1;
+
+COMMENT ON COLUMN alerts.event_count IS
+  'Số lần phát hiện nguy cơ va chạm cho cùng cặp tàu (upsert counter)';
+
 -- Kiểm tra kết quả
 SELECT column_name, data_type, column_default
 FROM information_schema.columns

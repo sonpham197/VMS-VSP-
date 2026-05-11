@@ -97,6 +97,8 @@ export function useCwaEngine(vessels) {
       // Trigger side effects cho risk mới
       if (brandNewRisks.length > 0) {
         triggerNotifications(brandNewRisks, isMuted);
+        // Persist DANGER risks vào DB (để AlertDrawer & CollisionHistoryPanel hiển thị)
+        persistDangerRisks(brandNewRisks);
       }
 
       // Lưu trạng thái hiện tại làm "previous" cho lần sau
@@ -184,6 +186,35 @@ export function useCwaEngine(vessels) {
  * @param {Array}   newRisks  - Danh sách risk mới
  * @param {boolean} isMuted   - Trạng thái tắt âm thanh
  */
+/**
+ * Ghi các DANGER risk mới vào DB thông qua API.
+ * Fire-and-forget: không block UI, lỗi chỉ log console.
+ * @param {Array} newRisks
+ */
+async function persistDangerRisks(newRisks) {
+  const dangerRisks = newRisks.filter((r) => r.risk_level === 'danger');
+  for (const risk of dangerRisks) {
+    try {
+      const nameA = risk.vesselA.Vessel_name || risk.vesselA.Vessel_id;
+      const nameB = risk.vesselB.Vessel_name || risk.vesselB.Vessel_id;
+      await fetch('/api/collision-alert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vesselIdA: risk.vesselA.Vessel_id,
+          vesselIdB: risk.vesselB.Vessel_id,
+          cpa_nm:    risk.cpa_nm,
+          tcpa_min:  risk.tcpa_min,
+          severity:  'danger',
+          description: `Va chạm tiềm ẩn: ${nameA} ↔ ${nameB} | CPA ${risk.cpa_nm.toFixed(2)} NM, TCPA ${Math.round(risk.tcpa_min)} phút`,
+        }),
+      });
+    } catch (err) {
+      console.warn('[CWA] Không thể persist risk vào DB:', err);
+    }
+  }
+}
+
 function triggerNotifications(newRisks, isMuted) {
   const hasDanger  = newRisks.some((r) => r.risk_level === 'danger');
   const hasWarning = newRisks.some((r) => r.risk_level === 'warning');
