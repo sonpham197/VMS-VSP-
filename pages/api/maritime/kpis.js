@@ -72,6 +72,8 @@ function forecastKpis(history, horizonDays) {
   const avgWait        = waits.slice(-7).reduce((s,v)=>s+v,0) / 7;
   const avgArrivals    = arrivals.slice(-7).reduce((s,v)=>s+v,0) / 7;
 
+  const lastHistoryDate = history.length ? new Date(history[history.length - 1].kpi_date) : new Date();
+
   const forecasts = [];
   for (let d = 1; d <= horizonDays; d++) {
     const trendVal   = lastSmoothed + trend.slope * d;
@@ -81,7 +83,7 @@ function forecastKpis(history, horizonDays) {
     const predicted  = Math.max(0, trendVal * seasonal * congFactor);
     const confidence = predicted * 0.12; // ±12% confidence interval
 
-    const forecastDate = new Date();
+    const forecastDate = new Date(lastHistoryDate);
     forecastDate.setDate(forecastDate.getDate() + d);
 
     forecasts.push({
@@ -174,7 +176,23 @@ export default async function handler(req, res) {
     const forecasts7d  = forecastKpis(history, 7);
     const forecasts30d = forecastKpis(history, 30);
 
-    res.status(200).json({ kpis: history, forecasts7d, forecasts30d, summary });
+    // Fetch real-time Vessel Class Distribution
+    const { data: vClasses } = await supabase.from('vessels').select('class_code');
+    const class_distribution = {};
+    if (vClasses) {
+      vClasses.forEach(v => {
+        const code = v.class_code || 'unknown';
+        class_distribution[code] = (class_distribution[code] || 0) + 1;
+      });
+    }
+
+    res.status(200).json({ 
+      kpis: history, 
+      forecasts7d, 
+      forecasts30d, 
+      summary,
+      class_distribution 
+    });
   } catch (err) {
     console.error('[maritime/kpis]', err);
     res.status(500).json({ error: err.message });

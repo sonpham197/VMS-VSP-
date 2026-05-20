@@ -4,6 +4,29 @@
 ## 1. Mục tiêu (Objectives)
 Thiết kế và phát triển Module Trí tuệ Hàng hải AI (AI Maritime Intelligence) tích hợp vào hệ thống Giám sát Tàu thuyền (VMS) hiện hữu. Mục tiêu chính nhằm cung cấp góc nhìn tổng quan và sâu sát về hoạt động của khu vực cảng, tối ưu hóa quá trình ra quyết định và nâng cao an toàn hàng hải.
 
+## 3. Quá trình Triển khai thực tế (Implementation Log)
+
+### Giai đoạn 1: Database & Seed (Hoàn tất)
+- [x] Tạo file `maritime_intelligence_schema.sql` (Tables, Views, RLS, Cron functions).
+- [x] Fix lỗi cú pháp SQL (Policy `ais_all`) và chạy thành công trên Supabase.
+- [x] Viết file `seed_maritime_demo.mjs` tạo 100 tàu demo giả lập với dữ liệu lịch sử AIS 7 ngày và quỹ đạo đa dạng.
+
+### Giai đoạn 2: Phát triển Backend API & Core Hooks (Hoàn tất)
+- [x] API Kpis (`pages/api/maritime/kpis.js`).
+- [x] API Heatmap (`pages/api/maritime/density.js`).
+- [x] Hook `useMaritimeAI` tích hợp cho Client.
+
+### Giai đoạn 3: Phát triển Giao diện UI (Hoàn tất)
+- [x] Tạo `pages/maritime-intelligence.js` làm Dashboard chính.
+- [x] Biểu đồ Forecast (Canvas), Heatmap Layer, Anomaly Feed.
+
+### Giai đoạn 4: Fix Bug Va Chạm CWS & Tinh chỉnh UX (Hoàn tất)
+- [x] Khắc phục tình trạng 100 tàu ảo sinh ra cảnh báo va chạm (CPA) hàng loạt bằng cách phân tán toạ độ vùng Vịnh Bắc Bộ và gán trạng thái tốc độ hợp lý (chạy/neo).
+- [x] **Smart Vessel Icons:** Custom SVG icons hiển thị đa dạng hình dáng theo chuẩn IMO (Container, Tanker, Tug, Bulk...). Gắn huy hiệu ⚓ tự động cho tàu có vận tốc < 0.5 kn.
+- [x] **Dynamic Tooltips:** Sử dụng CSS Glassmorphism để hiển thị giải thích thuật ngữ trên các bảng thông số KPI, Gauge và biểu đồ.
+- [x] **Interactive Forecast Chart:** Nâng cấp biểu đồ dự báo Canvas tĩnh thành biểu đồ tương tác, tự động bắt điểm (snapping), kẻ vạch ngang và bật tooltip nổi hiển thị sản lượng cùng khoảng tin cậy.
+- [x] **Heatmap Bug:** Vá lỗi `Cannot read properties of undefined (reading 'appendChild')` của react-leaflet khi component bị huỷ (unmount) trong quá trình `await fetch`.
+
 ## 2. Các hạng mục đã triển khai (Implemented Features)
 
 ### 2.1. Cấu trúc dữ liệu (Database Schema)

@@ -22,7 +22,13 @@ export default function AlertDrawer({ isOpen, onClose, onLocate, liveCollisionRi
   };
 
   useEffect(() => {
-    fetchAlerts();
+    let active = true;
+    async function init() {
+      if (active) {
+        await fetchAlerts();
+      }
+    }
+    init();
 
     // Realtime subscription
     const channel = supabase.channel('public:alerts_live')

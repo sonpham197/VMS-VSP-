@@ -74,14 +74,19 @@ graph TD
 - **Backend (PostGIS)**: Sử dụng trigger `on_vessel_track_insert` để gọi function `process_vessel_track_alerts`. Kiểm tra `ST_Contains` giữa track mới và các zones. Tự động sinh `alerts` và cập nhật `status`.
 - **Frontend Fallback**: Sử dụng thuật toán Point-in-Polygon (Ray-casting) để xác định tàu nằm trong hay ngoài vùng ngay trên trình duyệt, đảm bảo Dashboard hiển thị cảnh báo ngay cả khi backend bị chậm.
 
-### 4.2 Dự báo quỹ đạo AI (LSTM)
-- **Mô hình**: Mạng Long Short-Term Memory (LSTM) huấn luyện trực tiếp trên chuỗi điểm hành trình.
-- **Cơ chế phòng vệ**: Tích hợp kiểm tra để dừng dự báo nếu quỹ đạo AI dự đoán đâm vào đất liền (`turf.booleanPointInPolygon`).
+### 4.2 Dự báo quỹ đạo AI (LSTM & Gradient Boosting)
+- **Mô hình Quỹ đạo**: Mạng Long Short-Term Memory (LSTM) huấn luyện trực tiếp trên chuỗi điểm hành trình. Tích hợp kiểm tra để dừng dự báo nếu quỹ đạo AI dự đoán đâm vào đất liền (`turf.booleanPointInPolygon`).
+- **Dự báo Thông lượng (Throughput Forecast)**: Sử dụng các mô hình học máy dạng Gradient Boosting kết hợp phân tích chuỗi thời gian (Trend Analysis) để dự báo lượng hàng hóa qua cảng trong 7 - 30 ngày.
 
 ### 4.3 Tối ưu hóa hải trình (ETA Optimization)
 Sử dụng hàm chi phí đa mục tiêu để tìm phương án di chuyển tốt nhất:
 $$Cost = a \cdot Time + b \cdot Fuel + c \cdot Risk + d \cdot Weather$$
 - **Risk & Weather**: Tự động lệch tâm lộ trình (Perturbation) để né tránh vùng bão dựa trên dữ liệu từ Open-Meteo và hệ thống hiển thị thời tiết (`VelocityLayer`).
+
+### 4.4 Engine Cảnh báo Va chạm & AI Dashboard UI
+- **CWS (Collision Warning System)**: Quét và tính toán ma trận CPA (Closest Point of Approach) và TCPA (Time to CPA) theo thời gian thực cho mọi cặp tàu. Kết hợp bộ lọc không gian (Spatial pre-filter) và lọc trạng thái (chỉ tính toán khi tàu có vận tốc `> 0.5 kn`) để giảm tải CPU.
+- **Smart Map UI**: Các biểu tượng (Markers) được kết xuất động (Dynamic SVG Rendering) tùy biến hình dạng theo chuẩn phân loại IMO (Container, Bulk, Tanker, v.v.). Các tàu neo đậu hoặc dừng hoạt động tự động hiển thị huy hiệu mỏ neo ⚓.
+- **Interactive AI Forecast Chart**: Biểu đồ Canvas sử dụng công nghệ khóa điểm thông minh (Snap-to-Point) kết hợp với CSS Glassmorphism Tooltip để thể hiện trực quan dữ liệu quá khứ và khoảng tin cậy của dự báo AI.
 
 ---
 

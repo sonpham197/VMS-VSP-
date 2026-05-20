@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Edit2, Trash2, Check, Ship, Hash, Palette } from 'lucide-react';
 
+function generateFleetId() {
+  return 'fleet_' + Date.now();
+}
+
 export default function FleetManager({ onClose, vessels, onFleetsChange }) {
   const [fleets, setFleets] = useState([]);
   const [editingId, setEditingId] = useState(null);
@@ -12,7 +16,10 @@ export default function FleetManager({ onClose, vessels, onFleetsChange }) {
     const saved = localStorage.getItem('vms_fleets');
     if (saved) {
       try {
-        setFleets(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        Promise.resolve().then(() => {
+          setFleets(parsed);
+        });
       } catch {}
     }
   }, []);
@@ -25,7 +32,7 @@ export default function FleetManager({ onClose, vessels, onFleetsChange }) {
 
   const handleAddFleet = () => {
     const newFleet = {
-      id: 'fleet_' + Date.now(),
+      id: generateFleetId(),
       name: 'Nhóm tàu mới',
       color: '#38bdf8',
       vessels: []

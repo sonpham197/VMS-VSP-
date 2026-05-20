@@ -62,7 +62,9 @@ export function useCwaEngine(vessels) {
 
   useEffect(() => {
     if (!vessels || vessels.length < 2) {
-      setCollisionRisks([]);
+      Promise.resolve().then(() => {
+        setCollisionRisks([]);
+      });
       return;
     }
 

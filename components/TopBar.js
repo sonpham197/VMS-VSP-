@@ -9,7 +9,12 @@ export default function TopBar({ vessels = [], fleets = [], selectedFleetId = 'a
   useEffect(() => {
     const session = localStorage.getItem('vms_session');
     if (session) {
-      try { setCurrentUser(JSON.parse(session)); } catch { }
+      try {
+        const parsed = JSON.parse(session);
+        Promise.resolve().then(() => {
+          setCurrentUser(parsed);
+        });
+      } catch { }
     }
   }, []);
 

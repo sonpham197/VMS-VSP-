@@ -421,7 +421,16 @@ export default function VesselsPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchVessels(); }, [fetchVessels]);
+  useEffect(() => {
+    let isMounted = true;
+    async function init() {
+      if (isMounted) {
+        await fetchVessels();
+      }
+    }
+    init();
+    return () => { isMounted = false; };
+  }, [fetchVessels]);
 
   const handleSaved = (saved, isEdit) => {
     if (isEdit) setVessels(prev => prev.map(v => v.Vessel_id === saved.Vessel_id ? saved : v));

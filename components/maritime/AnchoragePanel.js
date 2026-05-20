@@ -29,11 +29,18 @@ function OccupancyBar({ current, max, color }) {
 }
 
 export default function AnchoragePanel() {
-  const [zones, setZones] = useState(ZONES.map(z => ({ ...z, current: Math.floor(Math.random() * z.max * 0.75), avg_wait: +(Math.random() * 20 + 2).toFixed(1) })));
+  const [zones, setZones] = useState(ZONES.map(z => ({ ...z, current: Math.floor(z.max * 0.4), avg_wait: 5.5 })));
   const [loading, setLoading] = useState(false);
 
-  // Simulate live refresh
   useEffect(() => {
+    Promise.resolve().then(() => {
+      setZones(prev => prev.map(z => ({
+        ...z,
+        current: Math.floor(Math.random() * z.max * 0.75),
+        avg_wait: +(Math.random() * 20 + 2).toFixed(1)
+      })));
+    });
+
     const t = setInterval(() => {
       setZones(prev => prev.map(z => ({
         ...z,

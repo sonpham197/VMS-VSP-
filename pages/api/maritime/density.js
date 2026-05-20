@@ -12,16 +12,32 @@ const supabase = createClient(
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
-  const hours = Math.min(72, parseInt(req.query.hours) || 24);
-
   try {
-    const since = new Date(Date.now() - hours * 3600000).toISOString();
+    const hours = Math.min(72, parseInt(req.query.hours) || 24);
+    // Get the latest timestamp in ais_messages to determine the relative "now" for simulated data
+    let baseTime = Date.now();
+    const { data: maxTimeData, error: maxTimeErr } = await supabase
+      .from('ais_messages')
+      .select('timestamp')
+      .order('timestamp', { ascending: false })
+      .limit(1);
+    
+    if (!maxTimeErr && maxTimeData?.[0]?.timestamp) {
+      const dbLatest = new Date(maxTimeData[0].timestamp).getTime();
+      // If the database latest timestamp is in the past compared to the current time window, use it as baseTime
+      if (dbLatest < baseTime) {
+        baseTime = dbLatest;
+      }
+    }
+
+    const since = new Date(baseTime - hours * 3600000).toISOString();
 
     // Heatmap points: lat/lng + weight (speed-based: slower = denser cluster)
     const { data: positions, error } = await supabase
       .from('ais_messages')
       .select('lat, lng, speed, nav_status, timestamp')
       .gte('timestamp', since)
+      .lte('timestamp', new Date(baseTime).toISOString())
       .limit(5000);
 
     if (error) throw error;

@@ -14,8 +14,23 @@ const supabase = createClient(
 // ─── Anomaly detection rules (run against AIS data) ──────────────────────────
 async function detectLiveAnomalies() {
   const detected = [];
-  // Use 7-day window to work with demo data (seeded in past 7 days)
-  const since7d = new Date(Date.now() - 7 * 86400000).toISOString();
+  
+  // Get the latest timestamp in ais_messages to determine the relative "now" for simulated data
+  let baseTime = Date.now();
+  const { data: maxTimeData, error: maxTimeErr } = await supabase
+    .from('ais_messages')
+    .select('timestamp')
+    .order('timestamp', { ascending: false })
+    .limit(1);
+  
+  if (!maxTimeErr && maxTimeData?.[0]?.timestamp) {
+    const dbLatest = new Date(maxTimeData[0].timestamp).getTime();
+    if (dbLatest < baseTime) {
+      baseTime = dbLatest;
+    }
+  }
+
+  const since7d = new Date(baseTime - 7 * 86400000).toISOString();
 
   // Rule 1: Congestion — count unique anchored vessels in last 7 days
   const { data: anchoraged } = await supabase
@@ -23,6 +38,7 @@ async function detectLiveAnomalies() {
     .select('vessel_id')
     .in('nav_status', [1, 3])
     .gte('timestamp', since7d)
+    .lte('timestamp', new Date(baseTime).toISOString())
     .limit(1000);
   const uniqueAnchored = new Set((anchoraged || []).map(r => r.vessel_id)).size;
   if (uniqueAnchored > 10) {
@@ -43,6 +59,7 @@ async function detectLiveAnomalies() {
     .select('vessel_id')
     .eq('nav_status', 0)
     .gte('timestamp', since7d)
+    .lte('timestamp', new Date(baseTime).toISOString())
     .limit(2000);
   const uniqueActive = new Set((underway || []).map(r => r.vessel_id)).size;
   if (uniqueActive > 20) {
@@ -92,12 +109,26 @@ export default async function handler(req, res) {
       .eq('status', 'open')
       .order('detected_at', { ascending: false });
 
-    // Fetch recent history (last 7 days)
-    const since7d = new Date(Date.now() - 7 * 86400000).toISOString();
+    // Fetch recent history (last 7 days relative to the latest anomaly in DB)
+    let historyBaseTime = Date.now();
+    const { data: maxAnomData, error: maxAnomErr } = await supabase
+      .from('anomalies')
+      .select('detected_at')
+      .order('detected_at', { ascending: false })
+      .limit(1);
+    
+    if (!maxAnomErr && maxAnomData?.[0]?.detected_at) {
+      const dbLatest = new Date(maxAnomData[0].detected_at).getTime();
+      if (dbLatest < historyBaseTime) {
+        historyBaseTime = dbLatest;
+      }
+    }
+    const since7d = new Date(historyBaseTime - 7 * 86400000).toISOString();
     const { data: history, error: e2 } = await supabase
       .from('anomalies')
       .select('*')
       .gte('detected_at', since7d)
+      .lte('detected_at', new Date(historyBaseTime).toISOString())
       .order('detected_at', { ascending: false })
       .limit(50);
 

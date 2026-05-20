@@ -103,6 +103,7 @@ export default function MaritimeIntelligence() {
   const [forecastHorizon, setForecastHorizon] = useState(7);
 
   const fetchAll = useCallback(async () => {
+    await Promise.resolve();
     setLoading(true);
     try {
       const [kpiRes, anomalyRes] = await Promise.all([
@@ -119,7 +120,16 @@ export default function MaritimeIntelligence() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    let isMounted = true;
+    async function init() {
+      if (isMounted) {
+        await fetchAll();
+      }
+    }
+    init();
+    return () => { isMounted = false; };
+  }, [fetchAll]);
   // Auto-refresh every 60s
   useEffect(() => {
     const t = setInterval(fetchAll, 60000);
@@ -129,16 +139,16 @@ export default function MaritimeIntelligence() {
   const s = kpiData?.summary || {};
   const forecasts = forecastHorizon === 7 ? kpiData?.forecasts7d : kpiData?.forecasts30d;
 
-  // Vessel class distribution (derived from KPI context)
+  // Vessel class distribution (derived from real-time API data)
   const classDist = [
-    { class_code: 'container',    label: 'Container',      count: 15 },
-    { class_code: 'bulk_carrier', label: 'Hàng rời',       count: 15 },
-    { class_code: 'tanker',       label: 'Tàu dầu',        count: 12 },
-    { class_code: 'general_cargo',label: 'Hàng tổng hợp',  count: 18 },
-    { class_code: 'tugboat',      label: 'Tàu lai',        count: 10 },
-    { class_code: 'fishing',      label: 'Tàu cá',         count: 15 },
-    { class_code: 'passenger',    label: 'Hành khách',     count: 5  },
-    { class_code: 'offshore_support', label: 'Dịch vụ biển', count: 10 },
+    { class_code: 'container',    label: 'Container',      count: kpiData?.class_distribution?.container || 0 },
+    { class_code: 'bulk_carrier', label: 'Hàng rời',       count: kpiData?.class_distribution?.bulk_carrier || 0 },
+    { class_code: 'tanker',       label: 'Tàu dầu',        count: kpiData?.class_distribution?.tanker || 0 },
+    { class_code: 'general_cargo',label: 'Hàng tổng hợp',  count: kpiData?.class_distribution?.general_cargo || 0 },
+    { class_code: 'tugboat',      label: 'Tàu lai',        count: kpiData?.class_distribution?.tugboat || 0 },
+    { class_code: 'fishing',      label: 'Tàu cá',         count: kpiData?.class_distribution?.fishing || 0 },
+    { class_code: 'passenger',    label: 'Hành khách',     count: kpiData?.class_distribution?.passenger || 0 },
+    { class_code: 'offshore_support', label: 'Dịch vụ biển', count: kpiData?.class_distribution?.offshore_support || 0 },
   ];
 
   const tabs = [
@@ -229,7 +239,9 @@ export default function MaritimeIntelligence() {
 
               {/* Vessel class distribution */}
               <div className="mi-card span-2 has-tooltip">
-                <div className="mi-card-title"><Ship size={16}/> Phân loại đội tàu (100 tàu demo)</div>
+                <div className="mi-card-title">
+                  <Ship size={16}/> Phân loại đội tàu ({Object.values(kpiData?.class_distribution || {}).reduce((a,b)=>a+b, 0)} tàu)
+                </div>
                 <ClassDistribution data={classDist}/>
                 <div className="kpi-tooltip">
                   Thống kê số lượng phương tiện theo chuẩn phân loại IMO. Giúp đánh giá cơ cấu trọng tải đang lưu thông trong khu vực.

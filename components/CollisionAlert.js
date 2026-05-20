@@ -44,7 +44,9 @@ export default function CollisionAlert({
   const [shaking, setShaking] = useState(false);
   useEffect(() => {
     if (activeRisks.length > prevCountRef.current) {
-      setShaking(true);
+      Promise.resolve().then(() => {
+        setShaking(true);
+      });
       const t = setTimeout(() => setShaking(false), 600);
       prevCountRef.current = activeRisks.length;
       return () => clearTimeout(t);

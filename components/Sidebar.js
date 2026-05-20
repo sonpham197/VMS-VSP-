@@ -45,7 +45,11 @@ export default function Sidebar({ selectedVessel, vessels = [], onClose }) {
 
   useEffect(() => {
     const saved = localStorage.getItem('sidebarBgColor');
-    if (saved) setBgColor(saved);
+    if (saved) {
+      Promise.resolve().then(() => {
+        setBgColor(saved);
+      });
+    }
   }, []);
 
   const handleBgColorChange = (e) => {

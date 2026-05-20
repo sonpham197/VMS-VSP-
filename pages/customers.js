@@ -301,7 +301,11 @@ export default function CustomersPage() {
 
   useEffect(() => {
     const session = localStorage.getItem('vms_session');
-    if (session) setCurrentUser(JSON.parse(session));
+    if (session) {
+      Promise.resolve().then(() => {
+        setCurrentUser(JSON.parse(session));
+      });
+    }
   }, []);
 
   // Fetch customers
@@ -313,7 +317,16 @@ export default function CustomersPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
+  useEffect(() => {
+    let isMounted = true;
+    async function init() {
+      if (isMounted) {
+        await fetchCustomers();
+      }
+    }
+    init();
+    return () => { isMounted = false; };
+  }, [fetchCustomers]);
 
   const handleSaved = (saved, isEdit) => {
     if (isEdit) {

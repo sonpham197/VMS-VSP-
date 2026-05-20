@@ -19,8 +19,11 @@ export default function DensityMap() {
     async function init() {
       if (typeof window === 'undefined') return;
       L = (await import('leaflet')).default;
+      if (typeof window !== 'undefined') {
+        window.L = L;
+      }
       await import('leaflet/dist/leaflet.css');
-      const LH = (await import('leaflet.heat')).default;
+      await import('leaflet.heat');
 
       if (!isMounted) return;
 

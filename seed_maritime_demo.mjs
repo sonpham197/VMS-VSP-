@@ -371,14 +371,19 @@ async function main() {
     Vessel_id:     v.Vessel_id,
     Vessel_name:   v.Vessel_name,
     vessel_type:   v.vessel_type,
+    class_code:    v.class_code,
     flag:          v.flag,
     MMSI:          v.MMSI,
     IMO:           v.IMO,
+    dwt:           v.dwt,
+    loa_m:         v.loa_m,
+    beam_m:        v.beam_m,
+    max_draft_m:   v.max_draft_m,
+    call_sign:     v.call_sign,
     gross_tonnage: v.gross_tonnage,
     year_built:    v.year_built,
     owner:         v.owner,
-    // Store extra maritime fields in description until schema migration is run
-    description:   JSON.stringify({ class_code: v.class_code, dwt: v.dwt, loa_m: v.loa_m, max_draft_m: v.max_draft_m }),
+    description:   `AI Simulated Vessel - ${v.class_code}`,
   }));
   const { error: vErr } = await supabase.from('vessels').upsert(dbVessels, { onConflict: 'Vessel_id' });
   if (vErr) { console.error('Vessel upsert error:', vErr.message); process.exit(1); }
@@ -390,6 +395,7 @@ async function main() {
   const now = new Date();
   const CHUNK = 500;
   let chunkBuf = [];
+  const latestTracksMemory = [];
 
   for (let vi = 0; vi < allVessels.length; vi++) {
     const v = allVessels[vi];
@@ -400,6 +406,18 @@ async function main() {
     const startTime   = new Date(now.getTime() - startOffset);
 
     const aisRecs = simulator(v, startTime.toISOString());
+
+    // Capture latest track for main dashboard sync
+    const lastRec = aisRecs[aisRecs.length - 1];
+    latestTracksMemory.push({
+      Vessel_id:  v.Vessel_id,
+      lat:        lastRec.lat,
+      lng:        lastRec.lng,
+      speed:      lastRec.speed,
+      heading:    lastRec.heading,
+      status:     'normal',
+      created_at: lastRec.timestamp,
+    });
 
     // Determine draft per record (simple: inbound = near max, outbound = half)
     const baseDraft = v.maxDraft * rnd(0.6, 1.0);
@@ -444,6 +462,12 @@ async function main() {
   }
 
   console.log(`\n✅ Total AIS records: ${totalAis}`);
+
+  // ── Sync latest positions to vessel_tracks (Main Dashboard support) ──
+  console.log('\n🔄 Syncing latest positions to vessel_tracks...');
+  const { error: trackErr } = await supabase.from('vessel_tracks').insert(latestTracksMemory);
+  if (trackErr) console.warn('vessel_tracks sync error:', trackErr.message);
+  else console.log(`   ✅ Synced ${latestTracksMemory.length} latest positions to vessel_tracks`);
 
   // ── Generate Port KPIs (90 days history) ──
   console.log('\n📊 Generating Port KPI history (90 days)...');
